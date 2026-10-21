@@ -1,0 +1,13 @@
+{
+  "name": "claude-prompt-memo",
+  "description": "Mémo de prompts par session pour Claude Code",
+  "owner": {
+    "name": "tipyaf"
+  },
+  "plugins": [
+    {
+      "name": "prompt-memo",
+      "source": "./"
+    }
+  ]
+}

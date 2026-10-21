@@ -1,0 +1,10 @@
+{
+  "name": "prompt-memo",
+  "version": "0.1.0",
+  "description": "Mémo par session : liste de prompts à lancer plus tard (envoyer, insérer, modifier, supprimer)",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "tipyaf"
+  },
+  "repository": "https://github.com/tipyaf/claude-prompt-memo"
+}
