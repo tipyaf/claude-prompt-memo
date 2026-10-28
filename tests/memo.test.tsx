@@ -275,3 +275,29 @@ test('a listing that failed is asked again on the next keystroke', async ($, on)
   expect(await ui.find({ key: 'complete-init' })).toBeDefined()
   await ui.unmount()
 })
+
+test('the list shows eight one-line rows', async ($, on) => {
+  mock.clock(on)
+  on('session.id', () => ({ value: 'session-many' }))
+  const many = Array.from({ length: 10 }, (_, i) => ({
+    name: `deploy-${i}`,
+    description: `Line one\nline two ${i}`,
+    source: 'user' as const,
+  }))
+  on('command.list', () => ({
+    value: [...many, { name: 'x:deploy-later', description: '', source: 'plugin', plugin: 'x' }],
+  }))
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.input({ key: 'draft', text: '/deploy-', kind: 'change' })
+  const rows = (await ui.findAll({ type: 'Button' })).filter(row =>
+    row.key?.startsWith('complete-'),
+  )
+  expect(rows).toHaveLength(8)
+  expect(rows[0]!.text).not.toMatch(/line two/)
+
+  // Narrowed to the skill matching by short name, Enter completes to its full name.
+  await ui.input({ key: 'draft', text: '/deploy-l' })
+  expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/x:deploy-later ')
+  await ui.unmount()
+})

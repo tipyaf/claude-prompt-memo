@@ -41,29 +41,35 @@ function shortName(command: CommandInfo) {
   return command.source === 'plugin' ? name.slice(name.lastIndexOf(':') + 1) : name
 }
 
-const startsWith = (command: CommandInfo, query: string) =>
-  command.name.toLowerCase().startsWith(query) || shortName(command).startsWith(query)
+// How well a command matches `query`, best first: its name or short name equal to it (0), its name
+// (1) or short name (2) starting with it, its name containing it (3); null when it does not match.
+function rankOf(command: CommandInfo, query: string) {
+  const name = command.name.toLowerCase()
+  const short = shortName(command)
+  if (name === query || short === query) {
+    return 0
+  }
+  if (name.startsWith(query)) {
+    return 1
+  }
+  if (short.startsWith(query)) {
+    return 2
+  }
 
-// Commands and skills matching `query`, one per name whatever its case: a name or short name equal
-// to it first, then names starting with it, plugin skills whose short name does, names containing it.
+  return name.includes(query) ? 3 : null
+}
+
+// Commands and skills matching `query`, best rank first, one per name whatever its case.
 function matchCommands(commands: CommandInfo[], query: string) {
   const seen = new Set<string>()
   const groups: CommandInfo[][] = [[], [], [], []]
   for (const one of commands) {
     const name = one.name.toLowerCase()
-    if (seen.has(name) || !name.includes(query)) {
+    const rank = rankOf(one, query)
+    if (seen.has(name) || rank === null) {
       continue
     }
     seen.add(name)
-    const short = shortName(one)
-    const rank =
-      name === query || short === query
-        ? 0
-        : name.startsWith(query)
-          ? 1
-          : short.startsWith(query)
-            ? 2
-            : 3
     groups[rank]!.push(one)
   }
 
@@ -100,13 +106,19 @@ function enterTarget(query: string, matches: CommandInfo[]) {
 
   return (
     matches.find(one => shortName(one) === query) ??
-    (first && startsWith(first, query) ? first : null)
+    (first && rankOf(first, query)! < 3 ? first : null)
   )
 }
 
-// What a suggestion shows after its name: its plugin, or where it comes from; nothing for a built-in.
-const sourceTag = (command: CommandInfo) =>
-  command.plugin ?? (command.source === 'builtin' ? '' : command.source)
+// What a suggestion shows after its name: its plugin, unless the name already starts with it, or
+// where it comes from; nothing for a built-in.
+function sourceTag(command: CommandInfo) {
+  if (command.plugin) {
+    return command.name.startsWith(`${command.plugin}:`) ? '' : command.plugin
+  }
+
+  return command.source === 'builtin' ? '' : command.source
+}
 
 // Sessions whose command list is kept at once; the oldest goes first.
 const MAX_CACHED_SESSIONS = 4
@@ -190,7 +202,9 @@ async function draw(
   // band does not hold the keys the ring stays put.
   const complete = async (name: string) => {
     await update($, draft, value => replaceToken(value, name))
-    await $.ui.focus({ requestId: bandId, key: 'draft' }).catch(() => undefined)
+    await Promise.resolve()
+      .then(() => $.ui.focus({ requestId: bandId, key: 'draft' }))
+      .catch(() => undefined)
   }
 
   const remove = (ids: string[]) =>
@@ -449,7 +463,7 @@ async function draw(
                           /{command.name}
                           {tag ? <Text dimColor> ({tag})</Text> : null}
                           {command.description ? (
-                            <Text dimColor> · {command.description}</Text>
+                            <Text dimColor> · {command.description.split('\n')[0]}</Text>
                           ) : null}
                         </Text>
                       </Button>
