@@ -39,12 +39,11 @@ function matchCommands(commands: CommandInfo[], query: string) {
   const starts: CommandInfo[] = []
   const contains: CommandInfo[] = []
   for (const one of commands) {
-    const name = one.name.toLowerCase()
-    const at = name.indexOf(query)
-    if (at < 0 || seen.has(name)) {
+    const at = one.name.toLowerCase().indexOf(query)
+    if (at < 0 || seen.has(one.name)) {
       continue
     }
-    seen.add(name)
+    seen.add(one.name)
     ;(at === 0 ? starts : contains).push(one)
   }
 
@@ -58,19 +57,21 @@ function replaceToken(value: string, name: string) {
   return at ? `${value.slice(0, at.start)}/${name} ` : value
 }
 
-// The command Enter completes `value` to, as in the chat: when the draft is only a partial `/name`,
-// the first match if a name starts with it and none is typed whole. A `/word` later in a prompt (a
-// path, a fraction) or a bare `/` is saved as typed.
-function enterTarget(value: string, commands: CommandInfo[]) {
+// The query of a draft that is only a partial `/name`, which Enter completes as in the chat. A
+// `/word` later in a prompt (a path, a fraction) or a bare `/` is saved as typed.
+function lonePartial(value: string) {
   const at = slashToken(value)
-  if (!at || at.query.length === 0 || value.slice(0, at.start).trim() !== '') {
-    return null
-  }
-  const matches = matchCommands(commands, at.query)
-  const [first] = matches
-  const isWhole = matches.some(one => one.name.toLowerCase() === at.query)
 
-  return first && !isWhole && first.name.toLowerCase().startsWith(at.query) ? first : null
+  return at && at.query.length > 0 && value.slice(0, at.start).trim() === '' ? at.query : null
+}
+
+// The command Enter takes among the `matches` of a lone partial `query`: the first when it starts
+// with the query, none when a name is typed whole.
+function enterTarget(query: string, matches: CommandInfo[]) {
+  const [first] = matches
+  const isWhole = matches.some(one => one.name.toLowerCase() === query)
+
+  return first && !isWhole && first.name.toLowerCase().startsWith(query) ? first : null
 }
 
 const SOURCE_TAGS: Record<CommandInfo['source'], string> = {
@@ -144,9 +145,9 @@ async function draw(
   if (Input && !token) {
     commandsBySession.delete(session.requestId)
   }
-  const listed = token ? await commands($, session.requestId) : []
-  const suggestions = token ? matchCommands(listed, token.query).slice(0, MAX_SUGGESTIONS) : []
-  const highlighted = token ? enterTarget(text, listed) : null
+  const matches = token ? matchCommands(await commands($, session.requestId), token.query) : []
+  const suggestions = matches.slice(0, MAX_SUGGESTIONS)
+  const highlighted = token && lonePartial(text) ? enterTarget(token.query, matches) : null
 
   const complete = (name: string) => update($, draft, value => replaceToken(value, name))
 
@@ -176,12 +177,13 @@ async function draw(
     }
     const id = await read($, editingId)
     const before = await read($, draft)
+    const query = id ? null : lonePartial(value)
     const command =
-      !id && slashToken(value) && enterTarget(value, await commands($, session.requestId))
+      query && enterTarget(query, matchCommands(await commands($, session.requestId), query))
     if (command) {
       // Text typed while the list was read wins over the completion.
       await update($, draft, current =>
-        current === before ? replaceToken(value, command.name) : current,
+        current === before || current === value ? replaceToken(value, command.name) : current,
       )
 
       return
@@ -389,7 +391,7 @@ async function draw(
                       onPress={() => complete(command.name)}
                     >
                       <Text
-                        color={command.name === highlighted?.name ? 'suggestion' : undefined}
+                        color={command === highlighted ? 'suggestion' : undefined}
                         wrap="truncate-end"
                       >
                         /{command.name}
