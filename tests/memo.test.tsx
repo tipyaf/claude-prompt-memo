@@ -142,6 +142,7 @@ test('a /word in the field lists matching commands and skills to complete', asyn
         source: 'builtin',
       },
       { name: 'code-review-strict', description: 'Strict review', source: 'user' },
+      { name: 'frontend:component', description: 'A user command in a folder', source: 'user' },
       { name: 'init', description: 'Write CLAUDE.md', source: 'builtin' },
     ],
   }))
@@ -204,6 +205,11 @@ test('a /word in the field lists matching commands and skills to complete', asyn
     await ui.input({ key: 'draft', text: '/code-review' })
     expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/engineering:code-review ')
 
+    // A user command's folder prefix is no short name: /component is saved as typed.
+    await ui.input({ key: 'draft', text: '/component' })
+    expect(await itemRows(ui)).toHaveLength(1)
+    await ui.press({ key: (await itemRows(ui))[0]!.key!.replace('press-', 'delete-') })
+
     // Enter on a whole command adds it to the memo, even when longer names start with it.
     await ui.input({ key: 'draft', text: '/review' })
     expect(await itemRows(ui)).toHaveLength(1)
@@ -247,4 +253,25 @@ test('the memo still draws when the command list fails', async ($, on) => {
     })
     await ui.unmount()
   }
+})
+
+test('a listing that failed is asked again on the next keystroke', async ($, on) => {
+  mock.clock(on)
+  on('session.id', () => ({ value: 'session-retry' }))
+  let calls = 0
+  on('command.list', () => {
+    calls += 1
+    if (calls === 1) {
+      throw new Error('not yet')
+    }
+
+    return { value: [{ name: 'init', description: 'Write CLAUDE.md', source: 'builtin' }] }
+  })
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.input({ key: 'draft', text: '/i', kind: 'change' })
+  expect(await ui.find({ key: 'complete-init' })).toBeUndefined()
+  await ui.input({ key: 'draft', text: '/in', kind: 'change' })
+  expect(await ui.find({ key: 'complete-init' })).toBeDefined()
+  await ui.unmount()
 })

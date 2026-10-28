@@ -33,11 +33,12 @@ function slashToken(text: string) {
   return match ? { start: match.index + match[1]!.length, query: match[2]!.toLowerCase() } : null
 }
 
-// A plugin skill's short name, after the colon of `plugin:skill`, lowercased; a plain name as is.
+// A plugin skill's short name, after the colon of `plugin:skill`, lowercased; any other command's
+// whole name, so a user's `dir:command` or an MCP prompt is matched by its full name alone.
 function shortName(command: CommandInfo) {
   const name = command.name.toLowerCase()
 
-  return name.slice(name.lastIndexOf(':') + 1)
+  return command.source === 'plugin' ? name.slice(name.lastIndexOf(':') + 1) : name
 }
 
 const startsWith = (command: CommandInfo, query: string) =>
