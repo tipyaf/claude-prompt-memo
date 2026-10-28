@@ -38,6 +38,14 @@ Depuis un shell :
 claude plugin install prompt-memo --marketplace tipyaf/claude-prompt-memo
 ```
 
+## Mise à jour
+
+```bash
+claude plugin update prompt-memo
+```
+
+Puis `/reload-plugins` dans la session, ou une nouvelle session. Les nouveautés de chaque version sont dans le [CHANGELOG](CHANGELOG.md).
+
 ## Développement
 
 ```bash
