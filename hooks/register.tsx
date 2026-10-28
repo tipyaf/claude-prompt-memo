@@ -33,31 +33,31 @@ function slashToken(text: string) {
   return match ? { start: match.index + match[1]!.length, query: match[2]!.toLowerCase() } : null
 }
 
-// A name and, for a plugin's `plugin:skill`, its short name after the colon, lowercased.
-function nameForms(command: CommandInfo) {
+// A plugin skill's short name, after the colon of `plugin:skill`, lowercased; a plain name as is.
+function shortName(command: CommandInfo) {
   const name = command.name.toLowerCase()
 
-  return [name, name.slice(name.lastIndexOf(':') + 1)]
+  return name.slice(name.lastIndexOf(':') + 1)
 }
 
 const startsWith = (command: CommandInfo, query: string) =>
-  nameForms(command).some(form => form.startsWith(query))
+  command.name.toLowerCase().startsWith(query) || shortName(command).startsWith(query)
 
-// Commands and skills matching `query`, one per name: names (or short names) starting with it first,
-// then names containing it.
+// Commands and skills matching `query`, one per name: names starting with it first, then plugin
+// skills whose short name does, then names containing it.
 function matchCommands(commands: CommandInfo[], query: string) {
   const seen = new Set<string>()
-  const starts: CommandInfo[] = []
-  const contains: CommandInfo[] = []
+  const groups: [CommandInfo[], CommandInfo[], CommandInfo[]] = [[], [], []]
   for (const one of commands) {
-    if (seen.has(one.name) || !one.name.toLowerCase().includes(query)) {
+    const name = one.name.toLowerCase()
+    if (seen.has(one.name) || !name.includes(query)) {
       continue
     }
     seen.add(one.name)
-    ;(startsWith(one, query) ? starts : contains).push(one)
+    groups[name.startsWith(query) ? 0 : shortName(one).startsWith(query) ? 1 : 2].push(one)
   }
 
-  return [...starts, ...contains]
+  return groups.flat()
 }
 
 // Whether the `/word` at `start` is all the draft holds, blank space before it aside.
@@ -80,14 +80,18 @@ function lonePartial(value: string, at = slashToken(value)) {
   return at && at.query.length > 0 && isLone(value, at.start) ? at.query : null
 }
 
-// The command Enter takes among the `matches` of a lone partial `query`: the first when its name or
-// short name starts with the query, none when a full name is typed whole. A plugin skill's short
-// name typed whole still expands to its full name.
+// The command Enter takes among the `matches` of a lone partial `query`: none when a full name is
+// typed whole, the skill whose short name is typed whole, else the first match starting with it.
 function enterTarget(query: string, matches: CommandInfo[]) {
+  if (matches.some(one => one.name.toLowerCase() === query)) {
+    return null
+  }
   const [first] = matches
-  const isWhole = matches.some(one => one.name.toLowerCase() === query)
 
-  return first && !isWhole && startsWith(first, query) ? first : null
+  return (
+    matches.find(one => shortName(one) === query) ??
+    (first && startsWith(first, query) ? first : null)
+  )
 }
 
 // What a suggestion shows after its name: its plugin, or where it comes from; nothing for a built-in.
@@ -104,6 +108,10 @@ const commandsBySession = new Map<string, Promise<CommandInfo[]>>()
 function commands($: EngineInterface, sessionId: string) {
   const cached = commandsBySession.get(sessionId)
   if (cached) {
+    // Set again so the least recently used session is the one dropped below.
+    commandsBySession.delete(sessionId)
+    commandsBySession.set(sessionId, cached)
+
     return cached
   }
   // Started inside a promise so a call that throws at once is caught like one that rejects.
@@ -407,22 +415,28 @@ async function draw(
               />
               {suggestions.length > 0 && (
                 <Box flexDirection="column" paddingLeft={1}>
-                  {suggestions.map(command => (
-                    <Button
-                      key={`complete-${command.name}`}
-                      plain
-                      onPress={() => complete(command.name)}
-                    >
-                      <Text
-                        color={command === highlighted ? 'suggestion' : undefined}
-                        wrap="truncate-end"
+                  {suggestions.map(command => {
+                    const tag = sourceTag(command)
+
+                    return (
+                      <Button
+                        key={`complete-${command.name}`}
+                        plain
+                        onPress={() => complete(command.name)}
                       >
-                        /{command.name}
-                        {sourceTag(command) && <Text dimColor> ({sourceTag(command)})</Text>}
-                        {command.description && <Text dimColor> · {command.description}</Text>}
-                      </Text>
-                    </Button>
-                  ))}
+                        <Text
+                          color={command === highlighted ? 'suggestion' : undefined}
+                          wrap="truncate-end"
+                        >
+                          /{command.name}
+                          {tag ? <Text dimColor> ({tag})</Text> : null}
+                          {command.description ? (
+                            <Text dimColor> · {command.description}</Text>
+                          ) : null}
+                        </Text>
+                      </Button>
+                    )
+                  })}
                 </Box>
               )}
               {editing && (

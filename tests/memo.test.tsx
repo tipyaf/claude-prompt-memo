@@ -141,6 +141,7 @@ test('a /word in the field lists matching commands and skills to complete', asyn
         description: 'Resume a conversation',
         source: 'builtin',
       },
+      { name: 'code-review-strict', description: 'Strict review', source: 'user' },
       { name: 'init', description: 'Write CLAUDE.md', source: 'builtin' },
     ],
   }))
@@ -162,6 +163,7 @@ test('a /word in the field lists matching commands and skills to complete', asyn
       'complete-review-later',
       'complete-resume',
       'complete-engineering:code-review',
+      'complete-code-review-strict',
     ])
 
     // Mid-prompt nothing is highlighted: Enter there adds the prompt.
@@ -194,9 +196,10 @@ test('a /word in the field lists matching commands and skills to complete', asyn
     await ui.input({ key: 'draft', text: '\n  /in' })
     expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/init ')
 
-    // A plugin's skill completes by its short name.
+    // A full name starting with the query ranks before a plugin skill's short name...
     await ui.input({ key: 'draft', text: '/code-rev' })
-    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/engineering:code-review ')
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/code-review-strict ')
+    // ...but a short name typed whole completes to that skill.
     await ui.input({ key: 'draft', text: '/code-review' })
     expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/engineering:code-review ')
 
