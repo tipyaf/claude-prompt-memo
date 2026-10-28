@@ -310,3 +310,18 @@ test('the list shows eight one-line rows', async ($, on) => {
   expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/x:deploy-later ')
   await ui.unmount()
 })
+
+test('a long description is cut so a row stays one line', async ($, on) => {
+  mock.clock(on)
+  on('session.id', () => ({ value: 'session-long-description' }))
+  on('command.list', () => ({
+    value: [{ name: 'deploy', description: 'mot '.repeat(60), source: 'builtin' }],
+  }))
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.input({ key: 'draft', text: '/dep', kind: 'change' })
+  const row = await ui.find({ key: 'complete-deploy' })
+  expect(row!.text).toMatch(/^\/deploy · mot .*…$/)
+  expect(row!.text.length).toBe(BAND.props.bodyColumns - 6)
+  await ui.unmount()
+})

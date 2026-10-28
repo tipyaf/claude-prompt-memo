@@ -14,6 +14,8 @@ const expandedFamily = atom({ plugin: 'prompt-memo', key: 'expanded' } as const,
 
 // Columns an item row keeps for its marker, number and the four actions beside the text.
 const ROW_CHROME_COLUMNS = 43
+// Columns a suggestion row loses to the band's border and padding.
+const SUGGESTION_CHROME_COLUMNS = 6
 
 // The first line of a prompt, cut to `width` columns with an ellipsis when anything is left out.
 function preview(text: string, width: number) {
@@ -124,6 +126,16 @@ function sourceTag(command: CommandInfo) {
   }
 
   return command.plugin ?? command.source
+}
+
+// `text` cut to `width` columns with an ellipsis; nothing where not even one column and the
+// ellipsis fit. A Button's text wraps whatever its `wrap`, so a row is cut here.
+function cut(text: string, width: number) {
+  if (text.length <= width) {
+    return text
+  }
+
+  return width < 2 ? '' : `${text.slice(0, width - 1)}…`
 }
 
 // A description's first line with text, for a suggestion row that stays one line.
@@ -459,8 +471,15 @@ async function draw(
               {suggestions.length > 0 && (
                 <Box flexDirection="column" paddingLeft={1}>
                   {suggestions.map(command => {
+                    // Name, tag and description each take what the ones before leave.
+                    const width = columns - SUGGESTION_CHROME_COLUMNS
                     const tag = sourceTag(command)
+                    const name = cut(`/${command.name}`, width)
+                    const tagged = tag ? cut(` (${tag})`, width - name.length) : ''
                     const description = firstLine(command.description)
+                    const described = description
+                      ? cut(` · ${description}`, width - name.length - tagged.length)
+                      : ''
 
                     return (
                       <Button
@@ -472,9 +491,9 @@ async function draw(
                           color={command === highlighted ? 'suggestion' : undefined}
                           wrap="truncate-end"
                         >
-                          /{command.name}
-                          {tag ? <Text dimColor> ({tag})</Text> : null}
-                          {description ? <Text dimColor> · {description}</Text> : null}
+                          {name}
+                          {tagged ? <Text dimColor>{tagged}</Text> : null}
+                          {described ? <Text dimColor>{described}</Text> : null}
                         </Text>
                       </Button>
                     )
