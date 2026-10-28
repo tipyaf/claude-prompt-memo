@@ -2,6 +2,12 @@
 
 Versions follow the `version` field of `.claude-plugin/plugin.json`. An existing installation gets a new version with `claude plugin update prompt-memo`.
 
+## 0.3.1
+
+### Fixed
+- The suggestion list no longer draws over the memo's prompts, which made both unreadable. It now sits between the prompts and the field, right above the field's line, and the memo grows while it is open.
+- The field keeps the focus while the list opens and closes.
+
 ## 0.3.0
 
 ### Changed

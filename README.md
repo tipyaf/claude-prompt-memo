@@ -7,7 +7,7 @@ The memo's on-screen labels are in French; this README quotes them as they appea
 ## How it works
 
 - **Add**: type or paste a prompt (several lines are fine) in the memo's field, then press Enter or `+`.
-- **Commands and skills**: as in the chat, typing `/` in the memo's field opens the list of available commands and skills just above the field, over the memo's prompts, filtered as you type (the memo grows when its own rows are not enough). Click a row to complete it.
+- **Commands and skills**: as in the chat, typing `/` in the memo's field opens the list of available commands and skills right above the field's line, below the memo's prompts, filtered as you type (the memo grows while the list is open). Click a row to complete it.
   - When the field holds only the start of a name (`/rev`), Enter takes the highlighted suggestion (the field's `+` button turns into `→`), in this order: a plugin command's or skill's short name typed in full (`/code-review` becomes `/engineering:code-review`; for `plugin:folder:name`, both `folder:name` and `name` are short names), then a full name starting that way, then a short name starting that way.
   - A full name typed in full, a `/word` that only appears in the middle of a name, or a `/word` later in the text (a path, for example) is added as typed.
   - Only the `/word` at the end of the text is completed: the field does not report the cursor position.

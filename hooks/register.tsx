@@ -14,8 +14,8 @@ const expandedFamily = atom({ plugin: 'prompt-memo', key: 'expanded' } as const,
 
 // Columns an item row keeps for its marker, number and the four actions beside the text.
 const ROW_CHROME_COLUMNS = 43
-// Columns a suggestion row loses to the band's border and padding.
-const SUGGESTION_CHROME_COLUMNS = 4
+// Columns a suggestion row loses to the band's border and padding and its own indent.
+const SUGGESTION_CHROME_COLUMNS = 5
 
 // The first line of a prompt, cut to `width` columns with an ellipsis when anything is left out.
 function preview(text: string, width: number) {
@@ -221,10 +221,6 @@ async function draw(
   }
   const matches = token ? matchCommands(await commands($, session.requestId), token.query) : []
   const suggestions = matches.slice(0, MAX_SUGGESTIONS)
-  // Rows the band draws above the field (header, its margin, the items or the empty line), which
-  // the floating list covers; an unfolded item only adds to them.
-  const roomAbove = 2 + Math.max(1, list.length)
-  const overlayGap = Math.max(0, suggestions.length - roomAbove)
   const highlighted = token && lonePartial(text, token) ? enterTarget(token.query, matches) : null
 
   // Puts the field's cursor after a completion, so the person goes on typing the command's
@@ -479,10 +475,10 @@ async function draw(
           {Input ? (
             <Box flexDirection="column">
               {editing && <Text color="warning">Modification du prompt en cours</Text>}
-              {/* The band clips what floats past its top: it grows by the rows the list lacks. */}
-              {overlayGap > 0 && <Box key="suggestions-room" height={overlayGap} />}
-              {/* The suggestions float over the rows above the field, as the chat's own list does. */}
-              <Box key="field" flexDirection="column">
+              {/* The list shows right above the field's line, as the chat's own list does, but comes
+                  after the field in the tree: the focus ring follows that order, so the field keeps
+                  the keys while the list opens and closes. */}
+              <Box key="field" flexDirection="column-reverse">
                 <Input
                   key="draft"
                   rows={3}
@@ -493,14 +489,7 @@ async function draw(
                   onSubmit={(value: string) => save(value)}
                 />
                 {suggestions.length > 0 && (
-                  <Box
-                    key="suggestions"
-                    position="absolute"
-                    top={-suggestions.length}
-                    left={0}
-                    right={0}
-                    flexDirection="column"
-                  >
+                  <Box key="suggestions" flexDirection="column" paddingLeft={1}>
                     {suggestions.map(command => {
                       // Name, tag and description each take what the ones before leave.
                       const width = columns - SUGGESTION_CHROME_COLUMNS
@@ -511,10 +500,6 @@ async function draw(
                       const described = description
                         ? cut(` · ${description}`, width - name.length - tagged.length)
                         : ''
-                      // Blank to the edge, so the row covers what the overlay sits on.
-                      const fill = ' '.repeat(
-                        Math.max(0, width - name.length - tagged.length - described.length),
-                      )
 
                       return (
                         <Button
@@ -529,7 +514,6 @@ async function draw(
                             {name}
                             {tagged ? <Text dimColor>{tagged}</Text> : null}
                             {described ? <Text dimColor>{described}</Text> : null}
-                            {fill}
                           </Text>
                         </Button>
                       )
