@@ -198,8 +198,9 @@ async function draw(
   const opened = await read($, expanded)
   const textWidth = Math.max(12, columns - ROW_CHROME_COLUMNS)
   const isLong = (item: MemoItem) => preview(item.text, textWidth) !== item.text
-  // Only a surface that draws the field reads the list or drops it, so mobile leaves it alone. An
-  // edit in progress shows no suggestions: Enter there saves the text as it is.
+  // Suggestions show for a trailing `/word` in an open band's field, not while an item is edited
+  // (Enter there saves the text as it is). A surface with a field drops the list whenever it shows
+  // none; mobile, which has no field, leaves it alone.
   const token = collapsed || !Input || editing ? null : slashToken(text)
   if (Input && !token) {
     commandsBySession.delete(session.requestId)
