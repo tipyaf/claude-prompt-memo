@@ -42,7 +42,7 @@ function shortNames(command: CommandInfo) {
     return []
   }
 
-  return [name.slice(name.indexOf(':') + 1), name.slice(name.lastIndexOf(':') + 1)]
+  return [...new Set([name.slice(name.indexOf(':') + 1), name.slice(name.lastIndexOf(':') + 1)])]
 }
 
 // How well a command matches `query`, best first: its name (0) or short name (1) equal to it, its
@@ -156,11 +156,9 @@ function commands($: EngineInterface, sessionId: string) {
       return []
     })
   commandsBySession.set(sessionId, list)
-  for (const old of commandsBySession.keys()) {
-    if (commandsBySession.size <= MAX_CACHED_SESSIONS) {
-      break
-    }
-    commandsBySession.delete(old)
+  const [oldest] = commandsBySession.keys()
+  if (commandsBySession.size > MAX_CACHED_SESSIONS && oldest !== undefined) {
+    commandsBySession.delete(oldest)
   }
 
   return list

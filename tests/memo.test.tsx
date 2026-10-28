@@ -303,7 +303,7 @@ test('the list shows eight one-line rows', async ($, on) => {
     row.key?.startsWith('complete-'),
   )
   expect(rows).toHaveLength(8)
-  expect(rows[0]!.text).toMatch(/· Line one$/)
+  expect(rows[0]!.text).toBe('/deploy-0 (user) · Line one')
 
   // Narrowed to the skill matching by short name, Enter completes to its full name.
   await ui.input({ key: 'draft', text: '/deploy-l' })

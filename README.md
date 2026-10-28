@@ -5,7 +5,10 @@ Un mod Claude Code qui garde, pour chaque session, une liste de prompts à lance
 ## Fonctionnement
 
 - **Ajouter** : écris ou colle un prompt (plusieurs lignes possibles) dans le champ du mémo, puis Entrée ou `+`.
-- **Commandes et skills** : comme dans le chat, taper `/` dans le champ du mémo liste les commandes et skills disponibles, filtrés au fil de la frappe. Clic sur une ligne pour compléter. Quand le champ ne contient qu'un début de nom (`/rev`), la suggestion surlignée est celle qu'Entrée (ou `⇥` à la place de `+`) prend : la première commande qui commence ainsi ; une commande ou un skill de plugin se trouve aussi par le début de son nom court (`/code-review` devient `/engineering:code-review` ; un début de nom court passe après les commandes dont le nom complet commence ainsi), tandis qu'un nom complet tapé en entier est ajouté tel quel ; un `/mot` plus loin dans le texte (un chemin, par exemple) n'empêche pas Entrée d'ajouter le prompt. Seul le `/mot` en fin de texte est complété : le champ ne donne pas la position du curseur.
+- **Commandes et skills** : comme dans le chat, taper `/` dans le champ du mémo liste les commandes et skills disponibles, filtrés au fil de la frappe. Clic sur une ligne pour compléter.
+  - Quand le champ ne contient qu'un début de nom (`/rev`), Entrée (et `⇥` à la place de `+`) prend la suggestion surlignée, dans cet ordre : un nom court de commande ou skill de plugin tapé en entier (`/code-review` devient `/engineering:code-review`), puis un nom complet qui commence ainsi, puis un nom court qui commence ainsi.
+  - Un nom complet tapé en entier, un `/mot` qui n'apparaît qu'au milieu d'un nom, ou un `/mot` plus loin dans le texte (un chemin, par exemple) sont ajoutés tels quels.
+  - Seul le `/mot` en fin de texte est complété : le champ ne donne pas la position du curseur.
 - **Actions par item** :
   - `↑ envoyer` lance le prompt dans le chat et le retire du mémo ;
   - `↵ insérer` le colle dans la zone de saisie, au curseur ;
