@@ -303,7 +303,7 @@ test('the list shows eight one-line rows', async ($, on) => {
     row.key?.startsWith('complete-'),
   )
   expect(rows).toHaveLength(8)
-  expect(rows[0]!.text).toBe('/deploy-0 (user) · Line one')
+  expect(rows[0]!.text.trimEnd()).toBe('/deploy-0 (user) · Line one')
 
   // Narrowed to the skill matching by short name, Enter completes to its full name.
   await ui.input({ key: 'draft', text: '/deploy-l' })
@@ -322,6 +322,34 @@ test('a long description is cut so a row stays one line', async ($, on) => {
   await ui.input({ key: 'draft', text: '/dep', kind: 'change' })
   const row = await ui.find({ key: 'complete-deploy' })
   expect(row!.text).toMatch(/^\/deploy · mot .*…$/)
-  expect(row!.text.length).toBe(BAND.props.bodyColumns - 6)
+  expect(row!.text.length).toBe(BAND.props.bodyColumns - 4)
+  await ui.unmount()
+})
+
+test('the suggestions float above the field, the band growing only by the rows they lack', async ($, on) => {
+  mock.clock(on)
+  on('session.id', () => ({ value: 'session-overlay' }))
+  on('command.list', () => ({
+    value: Array.from({ length: 10 }, (_, i) => ({
+      name: `run-${i}`,
+      description: '',
+      source: 'builtin' as const,
+    })),
+  }))
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.input({ key: 'draft', text: '/run', kind: 'change' })
+  const overlay = await ui.find({ key: 'suggestions' })
+  expect(overlay!.props.position).toBe('absolute')
+  expect(overlay!.props.top).toBe(-8)
+  // An empty memo draws 3 rows above the field: the band grows by the 5 others.
+  expect((await ui.find({ key: 'suggestions-room' }))!.props.height).toBe(5)
+
+  // With enough items above the field, the list only covers them.
+  for (const text of ['un', 'deux', 'trois', 'quatre', 'cinq', 'six']) {
+    await ui.input({ key: 'draft', text })
+  }
+  await ui.input({ key: 'draft', text: '/run', kind: 'change' })
+  expect(await ui.find({ key: 'suggestions-room' })).toBeUndefined()
   await ui.unmount()
 })

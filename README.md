@@ -5,7 +5,7 @@ Un mod Claude Code qui garde, pour chaque session, une liste de prompts à lance
 ## Fonctionnement
 
 - **Ajouter** : écris ou colle un prompt (plusieurs lignes possibles) dans le champ du mémo, puis Entrée ou `+`.
-- **Commandes et skills** : comme dans le chat, taper `/` dans le champ du mémo liste les commandes et skills disponibles, filtrés au fil de la frappe. Clic sur une ligne pour compléter.
+- **Commandes et skills** : comme dans le chat, taper `/` dans le champ du mémo ouvre, juste au-dessus du champ et par-dessus les prompts du mémo, la liste des commandes et skills disponibles, filtrés au fil de la frappe (le mémo s'agrandit si ses lignes ne suffisent pas). Clic sur une ligne pour compléter.
   - Quand le champ ne contient qu'un début de nom (`/rev`), Entrée prend la suggestion surlignée (le bouton `+` du champ devient `→`), dans cet ordre : un nom court de commande ou skill de plugin tapé en entier (`/code-review` devient `/engineering:code-review` ; pour `plugin:dossier:nom`, `dossier:nom` et `nom` sont des noms courts), puis un nom complet qui commence ainsi, puis un nom court qui commence ainsi.
   - Un nom complet tapé en entier, un `/mot` qui n'apparaît qu'au milieu d'un nom, ou un `/mot` plus loin dans le texte (un chemin, par exemple) sont ajoutés tels quels.
   - Seul le `/mot` en fin de texte est complété : le champ ne donne pas la position du curseur.
