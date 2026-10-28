@@ -41,28 +41,27 @@ function shortName(command: CommandInfo) {
   return command.source === 'plugin' ? name.slice(name.lastIndexOf(':') + 1) : name
 }
 
-// How well a command matches `query`, best first: its name or short name equal to it (0), its name
-// (1) or short name (2) starting with it, its name containing it (3); null when it does not match.
+// How well a command matches `query`, best first: its name (0) or short name (1) equal to it, its
+// name (2) or short name (3) starting with it, its name containing it (4); null when it does not.
 function rankOf(command: CommandInfo, query: string) {
   const name = command.name.toLowerCase()
   const short = shortName(command)
-  if (name === query || short === query) {
-    return 0
-  }
-  if (name.startsWith(query)) {
-    return 1
-  }
-  if (short.startsWith(query)) {
-    return 2
-  }
+  const ranks = [
+    name === query,
+    short === query,
+    name.startsWith(query),
+    short.startsWith(query),
+    name.includes(query),
+  ]
+  const rank = ranks.indexOf(true)
 
-  return name.includes(query) ? 3 : null
+  return rank < 0 ? null : rank
 }
 
 // Commands and skills matching `query`, best rank first, one per name whatever its case.
 function matchCommands(commands: CommandInfo[], query: string) {
   const seen = new Set<string>()
-  const groups: CommandInfo[][] = [[], [], [], []]
+  const groups: CommandInfo[][] = [[], [], [], [], []]
   for (const one of commands) {
     const name = one.name.toLowerCase()
     const rank = rankOf(one, query)
@@ -106,7 +105,7 @@ function enterTarget(query: string, matches: CommandInfo[]) {
 
   return (
     matches.find(one => shortName(one) === query) ??
-    (first && rankOf(first, query)! < 3 ? first : null)
+    (first && rankOf(first, query)! < 4 ? first : null)
   )
 }
 
@@ -452,6 +451,7 @@ async function draw(
                 <Box flexDirection="column" paddingLeft={1}>
                   {suggestions.map(command => {
                     const tag = sourceTag(command)
+                    const description = firstLine(command.description)
 
                     return (
                       <Button
@@ -465,9 +465,7 @@ async function draw(
                         >
                           /{command.name}
                           {tag ? <Text dimColor> ({tag})</Text> : null}
-                          {firstLine(command.description) ? (
-                            <Text dimColor> · {firstLine(command.description)}</Text>
-                          ) : null}
+                          {description ? <Text dimColor> · {description}</Text> : null}
                         </Text>
                       </Button>
                     )
