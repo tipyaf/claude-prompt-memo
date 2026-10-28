@@ -60,26 +60,32 @@ function matchCommands(commands: CommandInfo[], query: string) {
   return [...starts, ...contains]
 }
 
-// The draft with its trailing `/word` replaced by `/name ` (a lone one with no blank space before).
+// Whether the `/word` at `start` is all the draft holds, blank space before it aside.
+const isLone = (value: string, start: number) => value.slice(0, start).trim() === ''
+
+// The draft with its trailing `/word` replaced by `/name `; a lone one also loses the blank space
+// before it, while text before a later one is kept as typed.
 function replaceToken(value: string, name: string) {
   const at = slashToken(value)
+  if (!at) {
+    return value
+  }
 
-  return at ? `${value.slice(0, at.start).trimStart()}/${name} ` : value
+  return `${isLone(value, at.start) ? '' : value.slice(0, at.start)}/${name} `
 }
 
 // The query of a draft that is only a partial `/name`, which Enter completes as in the chat. A
 // `/word` later in a prompt (a path, a fraction) or a bare `/` is saved as typed.
-function lonePartial(value: string) {
-  const at = slashToken(value)
-
-  return at && at.query.length > 0 && value.slice(0, at.start).trim() === '' ? at.query : null
+function lonePartial(value: string, at = slashToken(value)) {
+  return at && at.query.length > 0 && isLone(value, at.start) ? at.query : null
 }
 
 // The command Enter takes among the `matches` of a lone partial `query`: the first when its name or
-// short name starts with the query, none when a name is typed whole.
+// short name starts with the query, none when a full name is typed whole. A plugin skill's short
+// name typed whole still expands to its full name.
 function enterTarget(query: string, matches: CommandInfo[]) {
   const [first] = matches
-  const isWhole = matches.some(one => nameForms(one).includes(query))
+  const isWhole = matches.some(one => one.name.toLowerCase() === query)
 
   return first && !isWhole && startsWith(first, query) ? first : null
 }
@@ -96,23 +102,26 @@ const MAX_CACHED_SESSIONS = 4
 const commandsBySession = new Map<string, Promise<CommandInfo[]>>()
 
 function commands($: EngineInterface, sessionId: string) {
-  let list = commandsBySession.get(sessionId)
-  if (!list) {
-    const listed: Promise<CommandInfo[]> = $.command.list().catch(() => {
-      if (commandsBySession.get(sessionId) === listed) {
+  const cached = commandsBySession.get(sessionId)
+  if (cached) {
+    return cached
+  }
+  // Started inside a promise so a call that throws at once is caught like one that rejects.
+  const list: Promise<CommandInfo[]> = Promise.resolve()
+    .then(() => $.command.list())
+    .catch(() => {
+      if (commandsBySession.get(sessionId) === list) {
         commandsBySession.delete(sessionId)
       }
 
       return []
     })
-    list = listed
-    commandsBySession.set(sessionId, list)
-    for (const old of commandsBySession.keys()) {
-      if (commandsBySession.size <= MAX_CACHED_SESSIONS) {
-        break
-      }
-      commandsBySession.delete(old)
+  commandsBySession.set(sessionId, list)
+  for (const old of commandsBySession.keys()) {
+    if (commandsBySession.size <= MAX_CACHED_SESSIONS) {
+      break
     }
+    commandsBySession.delete(old)
   }
 
   return list
@@ -155,7 +164,7 @@ async function draw(
   }
   const matches = token ? matchCommands(await commands($, session.requestId), token.query) : []
   const suggestions = matches.slice(0, MAX_SUGGESTIONS)
-  const highlighted = token && lonePartial(text) ? enterTarget(token.query, matches) : null
+  const highlighted = token && lonePartial(text, token) ? enterTarget(token.query, matches) : null
 
   // The field takes the keys back, so the person goes on typing the command's arguments; where the
   // band does not hold the keys the ring stays put.
@@ -189,17 +198,18 @@ async function draw(
       return
     }
     const id = await read($, editingId)
-    const before = await read($, draft)
     const query = id ? null : lonePartial(value)
-    const command =
-      query && enterTarget(query, matchCommands(await commands($, session.requestId), query))
-    if (command) {
-      // Text typed while the list was read wins over the completion.
-      await update($, draft, current =>
-        current === before || current === value ? replaceToken(value, command.name) : current,
-      )
+    if (query) {
+      const before = await read($, draft)
+      const command = enterTarget(query, matchCommands(await commands($, session.requestId), query))
+      if (command) {
+        // Text typed while the list was read wins over the completion.
+        await update($, draft, current =>
+          current === before || current === value ? replaceToken(value, command.name) : current,
+        )
 
-      return
+        return
+      }
     }
     if (id) {
       await update($, items, all => all.map(one => (one.id === id ? { ...one, text: value } : one)))

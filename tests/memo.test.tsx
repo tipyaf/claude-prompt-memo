@@ -177,12 +177,12 @@ test('a /word in the field lists matching commands and skills to complete', asyn
 
     await ui.input({
       key: 'draft',
-      text: 'fais ceci puis /re',
+      text: '\n  fais ceci puis /re',
       kind: 'change',
     })
-    // A press replaces the /word and closes the list.
+    // A press replaces the /word, keeps the text before it as typed and closes the list.
     await ui.press({ key: 'complete-resume' })
-    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('fais ceci puis /resume ')
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('\n  fais ceci puis /resume ')
     expect(await rows()).toEqual([])
 
     // Enter on a partial name alone in the field takes the first match instead of adding it.
@@ -196,6 +196,8 @@ test('a /word in the field lists matching commands and skills to complete', asyn
 
     // A plugin's skill completes by its short name.
     await ui.input({ key: 'draft', text: '/code-rev' })
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/engineering:code-review ')
+    await ui.input({ key: 'draft', text: '/code-review' })
     expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/engineering:code-review ')
 
     // Enter on a whole command adds it to the memo, even when longer names start with it.
