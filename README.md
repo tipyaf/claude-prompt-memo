@@ -5,7 +5,7 @@ Un mod Claude Code qui garde, pour chaque session, une liste de prompts à lance
 ## Fonctionnement
 
 - **Ajouter** : écris ou colle un prompt (plusieurs lignes possibles) dans le champ du mémo, puis Entrée ou `+`.
-- **Commandes et skills** : comme dans le chat, taper `/` dans le champ du mémo liste les commandes et skills disponibles, filtrés au fil de la frappe. Clic (ou flèche ↓ puis Entrée) sur une ligne pour compléter ; Entrée sur un nom partiel prend la première suggestion.
+- **Commandes et skills** : comme dans le chat, taper `/` dans le champ du mémo liste les commandes et skills disponibles, filtrés au fil de la frappe. Clic sur une ligne pour compléter. Quand le champ ne contient qu'un `/nom` partiel, Entrée prend la première suggestion ; un `/mot` plus loin dans le texte (un chemin, par exemple) n'empêche pas Entrée d'ajouter le prompt.
 - **Actions par item** :
   - `↑ envoyer` lance le prompt dans le chat et le retire du mémo ;
   - `↵ insérer` le colle dans la zone de saisie, au curseur ;

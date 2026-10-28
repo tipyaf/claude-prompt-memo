@@ -23,9 +23,8 @@ function preview(text: string, width: number) {
   return isCut ? `${first.slice(0, Math.max(1, width - 1))}…` : first
 }
 
-// Rows the slash typeahead under the field shows at most, and how long a command list is reused.
+// Rows the slash typeahead under the field shows at most.
 const MAX_SUGGESTIONS = 8
-const COMMANDS_TTL_MS = 5000
 
 // The `/word` being typed at the end of the draft, as the chat's typeahead reads it.
 function slashToken(text: string) {
@@ -34,14 +33,37 @@ function slashToken(text: string) {
   return match ? { start: match.index + match[1]!.length, query: match[2]!.toLowerCase() } : null
 }
 
-// Commands and skills matching `query`: names starting with it first, then names containing it.
+// Commands and skills matching `query`, one per name: names starting with it first, then names containing it.
 function matchCommands(commands: CommandInfo[], query: string) {
-  const starts = commands.filter(one => one.name.toLowerCase().startsWith(query))
-  const contains = commands.filter(
-    one => !one.name.toLowerCase().startsWith(query) && one.name.toLowerCase().includes(query),
-  )
+  const seen = new Set<string>()
+  const starts: CommandInfo[] = []
+  const contains: CommandInfo[] = []
+  for (const one of commands) {
+    const name = one.name.toLowerCase()
+    const at = name.indexOf(query)
+    if (at < 0 || seen.has(name)) {
+      continue
+    }
+    seen.add(name)
+    ;(at === 0 ? starts : contains).push(one)
+  }
 
-  return [...starts, ...contains].slice(0, MAX_SUGGESTIONS)
+  return [...starts, ...contains]
+}
+
+// What Enter makes of a draft that is only a partial `/command`: the first match in its place, as
+// in the chat. A `/word` later in a prompt (a path, a fraction) or a whole command name is saved.
+function completeOnEnter(value: string, commands: CommandInfo[]) {
+  const at = slashToken(value)
+  if (!at || at.start !== 0) {
+    return null
+  }
+  const matches = matchCommands(commands, at.query)
+  if (matches.length === 0 || matches.some(one => one.name.toLowerCase() === at.query)) {
+    return null
+  }
+
+  return `/${matches[0]!.name} `
 }
 
 const SOURCE_TAGS: Record<CommandInfo['source'], string> = {
@@ -51,15 +73,17 @@ const SOURCE_TAGS: Record<CommandInfo['source'], string> = {
   mcp: 'mcp',
 }
 
-let commandsCache: { at: number; list: CommandInfo[] } | null = null
+// The command list per session, read once each time a `/word` starts and dropped when it ends.
+const commandsBySession = new Map<string, CommandInfo[]>()
 
-async function commands($: EngineInterface) {
-  const now = await $.clock.now()
-  if (!commandsCache || now - commandsCache.at > COMMANDS_TTL_MS) {
-    commandsCache = { at: now, list: await $.command.list() }
+async function commands($: EngineInterface, sessionId: string) {
+  let list = commandsBySession.get(sessionId)
+  if (!list) {
+    list = await $.command.list().catch(() => [])
+    commandsBySession.set(sessionId, list)
   }
 
-  return commandsCache.list
+  return list
 }
 
 let lastPress: { id: string; at: number } | null = null
@@ -91,7 +115,12 @@ async function draw(
   const textWidth = Math.max(12, columns - ROW_CHROME_COLUMNS)
   const isLong = (item: MemoItem) => preview(item.text, textWidth) !== item.text
   const token = collapsed ? null : slashToken(text)
-  const suggestions = token ? matchCommands(await commands($), token.query) : []
+  if (!token) {
+    commandsBySession.delete(session.requestId)
+  }
+  const suggestions = token
+    ? matchCommands(await commands($, session.requestId), token.query).slice(0, MAX_SUGGESTIONS)
+    : []
 
   const complete = (name: string) =>
     update($, draft, value => {
@@ -124,15 +153,11 @@ async function draw(
     if (value.trim().length === 0) {
       return
     }
-    // Enter on a partial `/command` takes the first suggestion, as in the chat.
-    const at = slashToken(value)
-    if (at) {
-      const matches = matchCommands(await commands($), at.query)
-      if (matches.length > 0 && !matches.some(one => one.name.toLowerCase() === at.query)) {
-        await update($, draft, () => `${value.slice(0, at.start)}/${matches[0]!.name} `)
+    const completed = completeOnEnter(value, await commands($, session.requestId))
+    if (completed) {
+      await update($, draft, () => completed)
 
-        return
-      }
+      return
     }
     const id = await read($, editingId)
     if (id) {

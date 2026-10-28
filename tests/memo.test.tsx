@@ -119,6 +119,8 @@ test('a /word in the field lists matching commands and skills to complete', asyn
   on('command.list', () => ({
     value: [
       { name: 'review', description: 'Review a pull request', source: 'builtin' },
+      { name: 'review', description: 'Same name, another source', source: 'user' },
+      { name: 'review-later', description: 'Later', source: 'user' },
       { name: 'code-review', description: 'Review the diff', source: 'plugin' },
       { name: 'resume', description: 'Resume a conversation', source: 'builtin' },
       { name: 'init', description: 'Write CLAUDE.md', source: 'builtin' },
@@ -133,22 +135,51 @@ test('a /word in the field lists matching commands and skills to complete', asyn
         .filter(key => key.startsWith('complete-'))
 
     await ui.input({ key: 'draft', text: 'fais ceci puis /re', kind: 'change' })
-    expect(await rows()).toEqual(['complete-review', 'complete-resume', 'complete-code-review'])
+    expect(await rows()).toEqual([
+      'complete-review',
+      'complete-review-later',
+      'complete-resume',
+      'complete-code-review',
+    ])
 
     // A press replaces the /word and closes the list.
     await ui.press({ key: 'complete-resume' })
     expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('fais ceci puis /resume ')
     expect(await rows()).toEqual([])
 
-    // Enter on a partial name takes the first match instead of adding the prompt.
+    // Enter on a partial name alone in the field takes the first match instead of adding it.
     await ui.input({ key: 'draft', text: '/in' })
     expect(await itemRows(ui)).toHaveLength(0)
     expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/init ')
 
-    // Enter on a whole command adds it to the memo.
-    await ui.input({ key: 'draft', text: '/init' })
+    // Enter on a whole command adds it to the memo, even when longer names start with it.
+    await ui.input({ key: 'draft', text: '/review' })
     expect(await itemRows(ui)).toHaveLength(1)
 
+    // A /word later in a prompt (a path) is saved as typed.
+    await ui.input({ key: 'draft', text: 'lis le fichier /re' })
+    expect(await itemRows(ui)).toHaveLength(2)
+
+    for (const row of await itemRows(ui)) {
+      await ui.press({ key: row.key!.replace('press-', 'delete-') })
+    }
+    await ui.unmount()
+  }
+})
+
+test('the memo still draws when the command list fails', async ($, on) => {
+  mock.clock(on)
+  on('session.id', () => ({ value: 'session-no-commands' }))
+  on('command.list', () => {
+    throw new Error('no listing here')
+  })
+
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...BAND, surface })
+    await ui.input({ key: 'draft', text: '/re', kind: 'change' })
+    expect(await ui.find({ key: 'toggle' })).toBeDefined()
+    await ui.input({ key: 'draft', text: '/re' })
+    expect(await itemRows(ui)).toHaveLength(1)
     await ui.press({ key: (await itemRows(ui))[0]!.key!.replace('press-', 'delete-') })
     await ui.unmount()
   }
