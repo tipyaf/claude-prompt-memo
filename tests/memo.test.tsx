@@ -118,11 +118,23 @@ test('a /word in the field lists matching commands and skills to complete', asyn
   on('session.id', () => ({ value: 'session-slash' }))
   on('command.list', () => ({
     value: [
-      { name: 'review', description: 'Review a pull request', source: 'builtin' },
-      { name: 'review', description: 'Same name, another source', source: 'user' },
+      {
+        name: 'review',
+        description: 'Review a pull request',
+        source: 'builtin',
+      },
+      {
+        name: 'review',
+        description: 'Same name, another source',
+        source: 'user',
+      },
       { name: 'review-later', description: 'Later', source: 'user' },
       { name: 'code-review', description: 'Review the diff', source: 'plugin' },
-      { name: 'resume', description: 'Resume a conversation', source: 'builtin' },
+      {
+        name: 'resume',
+        description: 'Resume a conversation',
+        source: 'builtin',
+      },
       { name: 'init', description: 'Write CLAUDE.md', source: 'builtin' },
     ],
   }))
@@ -134,7 +146,11 @@ test('a /word in the field lists matching commands and skills to complete', asyn
         .map(row => row.key ?? '')
         .filter(key => key.startsWith('complete-'))
 
-    await ui.input({ key: 'draft', text: 'fais ceci puis /re', kind: 'change' })
+    await ui.input({
+      key: 'draft',
+      text: 'fais ceci puis /re',
+      kind: 'change',
+    })
     expect(await rows()).toEqual([
       'complete-review',
       'complete-review-later',
@@ -142,6 +158,22 @@ test('a /word in the field lists matching commands and skills to complete', asyn
       'complete-code-review',
     ])
 
+    // Mid-prompt nothing is highlighted: Enter there adds the prompt.
+    const color = async (name: string) => {
+      const [label] = (await ui.find({ key: `complete-${name}` }))?.children ?? []
+
+      return (label as { props?: { color?: string } } | undefined)?.props?.color
+    }
+    expect(await color('review')).toBeUndefined()
+    await ui.input({ key: 'draft', text: '/re', kind: 'change' })
+    expect(await color('review')).toBe('suggestion')
+    expect(await color('resume')).toBeUndefined()
+
+    await ui.input({
+      key: 'draft',
+      text: 'fais ceci puis /re',
+      kind: 'change',
+    })
     // A press replaces the /word and closes the list.
     await ui.press({ key: 'complete-resume' })
     expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('fais ceci puis /resume ')
@@ -166,6 +198,14 @@ test('a /word in the field lists matching commands and skills to complete', asyn
     await ui.input({ key: 'draft', text: '/view' })
     expect(await itemRows(ui)).toHaveLength(4)
 
+    // An edit shows no suggestions and Enter saves the text as it is.
+    const first = (await itemRows(ui))[0]!.key!
+    await ui.press({ key: first.replace('press-', 'edit-') })
+    await ui.input({ key: 'draft', text: '/in', kind: 'change' })
+    expect(await rows()).toEqual([])
+    await ui.input({ key: 'draft', text: '/in' })
+    expect((await ui.find({ key: first }))?.text).toMatch(/\/in$/)
+
     for (const row of await itemRows(ui)) {
       await ui.press({ key: row.key!.replace('press-', 'delete-') })
     }
@@ -186,7 +226,9 @@ test('the memo still draws when the command list fails', async ($, on) => {
     expect(await ui.find({ key: 'toggle' })).toBeDefined()
     await ui.input({ key: 'draft', text: '/re' })
     expect(await itemRows(ui)).toHaveLength(1)
-    await ui.press({ key: (await itemRows(ui))[0]!.key!.replace('press-', 'delete-') })
+    await ui.press({
+      key: (await itemRows(ui))[0]!.key!.replace('press-', 'delete-'),
+    })
     await ui.unmount()
   }
 })

@@ -58,21 +58,19 @@ function replaceToken(value: string, name: string) {
   return at ? `${value.slice(0, at.start)}/${name} ` : value
 }
 
-// A draft that is only a partial `/command`, which Enter completes to the first name starting with
-// it, as in the chat. A `/word` later in a prompt (a path, a fraction) or a bare `/` is saved.
-function partialCommand(value: string) {
+// The command Enter completes `value` to, as in the chat: when the draft is only a partial `/name`,
+// the first match if a name starts with it and none is typed whole. A `/word` later in a prompt (a
+// path, a fraction) or a bare `/` is saved as typed.
+function enterTarget(value: string, commands: CommandInfo[]) {
   const at = slashToken(value)
-
-  return at && value.slice(0, at.start).trim() === '' && at.query.length > 0 ? at.query : null
-}
-
-// The command Enter takes for a partial `query`: the first match when it starts with the query,
-// none when a name is typed whole.
-function enterCommand(query: string, matches: CommandInfo[]) {
+  if (!at || at.query.length === 0 || value.slice(0, at.start).trim() !== '') {
+    return null
+  }
+  const matches = matchCommands(commands, at.query)
   const [first] = matches
-  const isWhole = matches.some(one => one.name.toLowerCase() === query)
+  const isWhole = matches.some(one => one.name.toLowerCase() === at.query)
 
-  return first && !isWhole && first.name.toLowerCase().startsWith(query) ? first : null
+  return first && !isWhole && first.name.toLowerCase().startsWith(at.query) ? first : null
 }
 
 const SOURCE_TAGS: Record<CommandInfo['source'], string> = {
@@ -82,26 +80,34 @@ const SOURCE_TAGS: Record<CommandInfo['source'], string> = {
   mcp: 'mcp',
 }
 
-// The command list of one session, read once each time a `/word` starts and dropped when it ends;
-// a listing that fails is dropped too, so the next keystroke asks again.
-let commandsCache: { sessionId: string; list: Promise<CommandInfo[]> } | null = null
+// Sessions whose command list is kept at once; the oldest goes first.
+const MAX_CACHED_SESSIONS = 4
+
+// Each session's command list, read once each time a `/word` starts and dropped when it ends; a
+// listing that fails is dropped too, so the next keystroke asks again.
+const commandsBySession = new Map<string, Promise<CommandInfo[]>>()
 
 function commands($: EngineInterface, sessionId: string) {
-  if (commandsCache?.sessionId !== sessionId) {
-    const entry = {
-      sessionId,
-      list: $.command.list().catch(() => {
-        if (commandsCache === entry) {
-          commandsCache = null
-        }
+  let list = commandsBySession.get(sessionId)
+  if (!list) {
+    const listed: Promise<CommandInfo[]> = $.command.list().catch(() => {
+      if (commandsBySession.get(sessionId) === listed) {
+        commandsBySession.delete(sessionId)
+      }
 
-        return []
-      }),
+      return []
+    })
+    list = listed
+    commandsBySession.set(sessionId, list)
+    for (const old of commandsBySession.keys()) {
+      if (commandsBySession.size <= MAX_CACHED_SESSIONS) {
+        break
+      }
+      commandsBySession.delete(old)
     }
-    commandsCache = entry
   }
 
-  return commandsCache.list
+  return list
 }
 
 let lastPress: { id: string; at: number } | null = null
@@ -132,15 +138,15 @@ async function draw(
   const opened = await read($, expanded)
   const textWidth = Math.max(12, columns - ROW_CHROME_COLUMNS)
   const isLong = (item: MemoItem) => preview(item.text, textWidth) !== item.text
-  // Only a surface that draws the field reads the list or drops it, so mobile leaves it alone.
-  const token = collapsed || !Input ? null : slashToken(text)
+  // Only a surface that draws the field reads the list or drops it, so mobile leaves it alone. An
+  // edit in progress shows no suggestions: Enter there saves the text as it is.
+  const token = collapsed || !Input || editing ? null : slashToken(text)
   if (Input && !token) {
-    commandsCache = null
+    commandsBySession.delete(session.requestId)
   }
-  const matches = token ? matchCommands(await commands($, session.requestId), token.query) : []
-  const suggestions = matches.slice(0, MAX_SUGGESTIONS)
-  const query = editing ? null : partialCommand(text)
-  const highlighted = query ? enterCommand(query, matches) : null
+  const listed = token ? await commands($, session.requestId) : []
+  const suggestions = token ? matchCommands(listed, token.query).slice(0, MAX_SUGGESTIONS) : []
+  const highlighted = token ? enterTarget(text, listed) : null
 
   const complete = (name: string) => update($, draft, value => replaceToken(value, name))
 
@@ -169,11 +175,14 @@ async function draw(
       return
     }
     const id = await read($, editingId)
-    const query = id ? null : partialCommand(value)
+    const before = await read($, draft)
     const command =
-      query && enterCommand(query, matchCommands(await commands($, session.requestId), query))
+      !id && slashToken(value) && enterTarget(value, await commands($, session.requestId))
     if (command) {
-      await update($, draft, () => replaceToken(value, command.name))
+      // Text typed while the list was read wins over the completion.
+      await update($, draft, current =>
+        current === before ? replaceToken(value, command.name) : current,
+      )
 
       return
     }
@@ -379,7 +388,10 @@ async function draw(
                       plain
                       onPress={() => complete(command.name)}
                     >
-                      <Text color={command === highlighted ? 'suggestion' : undefined} wrap="truncate-end">
+                      <Text
+                        color={command.name === highlighted?.name ? 'suggestion' : undefined}
+                        wrap="truncate-end"
+                      >
                         /{command.name}
                         {SOURCE_TAGS[command.source] && (
                           <Text dimColor> ({SOURCE_TAGS[command.source]})</Text>
