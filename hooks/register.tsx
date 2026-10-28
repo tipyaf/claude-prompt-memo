@@ -33,8 +33,8 @@ function slashToken(text: string) {
   return match ? { start: match.index + match[1]!.length, query: match[2]!.toLowerCase() } : null
 }
 
-// A plugin skill's short name, after the colon of `plugin:skill`, lowercased; any other command's
-// whole name, so a user's `dir:command` or an MCP prompt is matched by its full name alone.
+// A plugin command or skill's short name, after the colon of `plugin:name`, lowercased; any other
+// command's whole name, so a user's `dir:command` or an MCP prompt is matched by its full name alone.
 function shortName(command: CommandInfo) {
   const name = command.name.toLowerCase()
 
@@ -46,33 +46,36 @@ function shortName(command: CommandInfo) {
 function rankOf(command: CommandInfo, query: string) {
   const name = command.name.toLowerCase()
   const short = shortName(command)
-  const ranks = [
+  const rank = [
     name === query,
     short === query,
     name.startsWith(query),
     short.startsWith(query),
     name.includes(query),
-  ]
-  const rank = ranks.indexOf(true)
+  ].indexOf(true)
 
   return rank < 0 ? null : rank
 }
 
+// The ranks above at which a name or short name equals or starts with the query: Enter's to take.
+const isPrefixRank = (rank: number | null) => rank !== null && rank <= 3
+
 // Commands and skills matching `query`, best rank first, one per name whatever its case.
 function matchCommands(commands: CommandInfo[], query: string) {
   const seen = new Set<string>()
-  const groups: CommandInfo[][] = [[], [], [], [], []]
-  for (const one of commands) {
-    const name = one.name.toLowerCase()
-    const rank = rankOf(one, query)
+  const ranked: { command: CommandInfo; rank: number }[] = []
+  for (const command of commands) {
+    const name = command.name.toLowerCase()
+    const rank = rankOf(command, query)
     if (seen.has(name) || rank === null) {
       continue
     }
     seen.add(name)
-    groups[rank]!.push(one)
+    ranked.push({ command, rank })
   }
 
-  return groups.flat()
+  // A stable sort: equal ranks keep the typeahead's order.
+  return ranked.sort((a, b) => a.rank - b.rank).map(one => one.command)
 }
 
 // Whether the `/word` at `start` is all the draft holds, blank space before it aside.
@@ -105,7 +108,7 @@ function enterTarget(query: string, matches: CommandInfo[]) {
 
   return (
     matches.find(one => shortName(one) === query) ??
-    (first && rankOf(first, query)! < 4 ? first : null)
+    (first && isPrefixRank(rankOf(first, query)) ? first : null)
   )
 }
 
@@ -120,7 +123,11 @@ function sourceTag(command: CommandInfo) {
 }
 
 // A description's first line with text, for a suggestion row that stays one line.
-const firstLine = (text: string) => text.split(/\r?\n/).find(line => line.trim() !== '') ?? ''
+const firstLine = (text: string) =>
+  text
+    .split(/\r\n|\r|\n/)
+    .map(line => line.trim())
+    .find(line => line !== '') ?? ''
 
 // Sessions whose command list is kept at once; the oldest goes first.
 const MAX_CACHED_SESSIONS = 4

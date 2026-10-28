@@ -281,7 +281,7 @@ test('the list shows eight one-line rows', async ($, on) => {
   on('session.id', () => ({ value: 'session-many' }))
   const many = Array.from({ length: 10 }, (_, i) => ({
     name: `deploy-${i}`,
-    description: `\r\nLine one\r\nline two ${i}`,
+    description: `\r\n  Line one\rline two ${i}`,
     source: 'user' as const,
   }))
   on('command.list', () => ({
