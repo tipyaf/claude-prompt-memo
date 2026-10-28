@@ -43,18 +43,27 @@ function shortName(command: CommandInfo) {
 const startsWith = (command: CommandInfo, query: string) =>
   command.name.toLowerCase().startsWith(query) || shortName(command).startsWith(query)
 
-// Commands and skills matching `query`, one per name whatever its case: names starting with it
-// first, then plugin skills whose short name does, then names containing it.
+// Commands and skills matching `query`, one per name whatever its case: a name or short name equal
+// to it first, then names starting with it, plugin skills whose short name does, names containing it.
 function matchCommands(commands: CommandInfo[], query: string) {
   const seen = new Set<string>()
-  const groups: [CommandInfo[], CommandInfo[], CommandInfo[]] = [[], [], []]
+  const groups: CommandInfo[][] = [[], [], [], []]
   for (const one of commands) {
     const name = one.name.toLowerCase()
     if (seen.has(name) || !name.includes(query)) {
       continue
     }
     seen.add(name)
-    groups[name.startsWith(query) ? 0 : shortName(one).startsWith(query) ? 1 : 2].push(one)
+    const short = shortName(one)
+    const rank =
+      name === query || short === query
+        ? 0
+        : name.startsWith(query)
+          ? 1
+          : short.startsWith(query)
+            ? 2
+            : 3
+    groups[rank]!.push(one)
   }
 
   return groups.flat()
@@ -417,7 +426,7 @@ async function draw(
                 rows={3}
                 placeholder="Nouveau prompt… (collage accepté, Entrée pour ajouter)"
                 value={text}
-                submitLabel={editing ? '✓' : '+'}
+                submitLabel={editing ? '✓' : highlighted ? '⇥' : '+'}
                 onInput={(value: string) => update($, draft, () => value)}
                 onSubmit={(value: string) => save(value)}
               />
