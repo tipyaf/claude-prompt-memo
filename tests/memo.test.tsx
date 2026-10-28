@@ -144,6 +144,7 @@ test('a /word in the field lists matching commands and skills to complete', asyn
       { name: 'code-review-strict', description: 'Strict review', source: 'user' },
       { name: 'frontend:component', description: 'A user command in a folder', source: 'user' },
       { name: 'x:init', description: 'A skill named like a built-in', source: 'plugin' },
+      { name: 'tools:git:commit', description: 'A nested plugin command', source: 'plugin' },
       { name: 'init', description: 'Write CLAUDE.md', source: 'builtin' },
     ],
   }))
@@ -205,6 +206,10 @@ test('a /word in the field lists matching commands and skills to complete', asyn
     // ...but a short name typed whole completes to that skill.
     await ui.input({ key: 'draft', text: '/code-review' })
     expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/engineering:code-review ')
+
+    // A nested plugin command completes by its last part.
+    await ui.input({ key: 'draft', text: '/commit' })
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/tools:git:commit ')
 
     // A user command's folder prefix is no short name: /component is saved as typed.
     await ui.input({ key: 'draft', text: '/component' })

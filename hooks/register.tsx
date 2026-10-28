@@ -33,42 +33,49 @@ function slashToken(text: string) {
   return match ? { start: match.index + match[1]!.length, query: match[2]!.toLowerCase() } : null
 }
 
-// A plugin command or skill's short name, after the colon of `plugin:name`, lowercased; any other
-// command's whole name, so a user's `dir:command` or an MCP prompt is matched by its full name alone.
-function shortName(command: CommandInfo) {
+// A plugin command or skill's short names, lowercased: after the plugin's colon and, for a nested
+// `plugin:dir:name`, its last part too. None for any other command, so a user's `dir:command` or an
+// MCP prompt is matched by its full name alone.
+function shortNames(command: CommandInfo) {
   const name = command.name.toLowerCase()
+  if (command.source !== 'plugin' || !name.includes(':')) {
+    return []
+  }
 
-  return command.source === 'plugin' ? name.slice(name.indexOf(':') + 1) : name
+  return [name.slice(name.indexOf(':') + 1), name.slice(name.lastIndexOf(':') + 1)]
 }
 
 // How well a command matches `query`, best first: its name (0) or short name (1) equal to it, its
 // name (2) or short name (3) starting with it, its name containing it (4); null when it does not.
 function rankOf(command: CommandInfo, query: string) {
   const name = command.name.toLowerCase()
-  const short = shortName(command)
+  const shorts = shortNames(command)
   const rank = [
     name === query,
-    short === query,
+    shorts.includes(query),
     name.startsWith(query),
-    short.startsWith(query),
+    shorts.some(short => short.startsWith(query)),
     name.includes(query),
   ].indexOf(true)
 
   return rank < 0 ? null : rank
 }
 
-// Commands and skills matching `query`, best rank first, one per name whatever its case.
+// Commands and skills matching `query`, best rank first, one per name whatever its case: the first
+// listed of a name stands for it, matching or not.
 function matchCommands(commands: CommandInfo[], query: string) {
   const seen = new Set<string>()
   const ranked: { command: CommandInfo; rank: number }[] = []
   for (const command of commands) {
     const name = command.name.toLowerCase()
-    const rank = rankOf(command, query)
-    if (seen.has(name) || rank === null) {
+    if (seen.has(name)) {
       continue
     }
     seen.add(name)
-    ranked.push({ command, rank })
+    const rank = rankOf(command, query)
+    if (rank !== null) {
+      ranked.push({ command, rank })
+    }
   }
 
   // A stable sort: equal ranks keep the typeahead's order.
