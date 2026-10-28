@@ -33,28 +33,38 @@ function slashToken(text: string) {
   return match ? { start: match.index + match[1]!.length, query: match[2]!.toLowerCase() } : null
 }
 
-// Commands and skills matching `query`, one per name: names starting with it first, then names containing it.
+// A name and, for a plugin's `plugin:skill`, its short name after the colon, lowercased.
+function nameForms(command: CommandInfo) {
+  const name = command.name.toLowerCase()
+
+  return [name, name.slice(name.lastIndexOf(':') + 1)]
+}
+
+const startsWith = (command: CommandInfo, query: string) =>
+  nameForms(command).some(form => form.startsWith(query))
+
+// Commands and skills matching `query`, one per name: names (or short names) starting with it first,
+// then names containing it.
 function matchCommands(commands: CommandInfo[], query: string) {
   const seen = new Set<string>()
   const starts: CommandInfo[] = []
   const contains: CommandInfo[] = []
   for (const one of commands) {
-    const at = one.name.toLowerCase().indexOf(query)
-    if (at < 0 || seen.has(one.name)) {
+    if (seen.has(one.name) || !one.name.toLowerCase().includes(query)) {
       continue
     }
     seen.add(one.name)
-    ;(at === 0 ? starts : contains).push(one)
+    ;(startsWith(one, query) ? starts : contains).push(one)
   }
 
   return [...starts, ...contains]
 }
 
-// The draft with its trailing `/word` replaced by `/name `.
+// The draft with its trailing `/word` replaced by `/name ` (a lone one with no blank space before).
 function replaceToken(value: string, name: string) {
   const at = slashToken(value)
 
-  return at ? `${value.slice(0, at.start)}/${name} ` : value
+  return at ? `${value.slice(0, at.start).trimStart()}/${name} ` : value
 }
 
 // The query of a draft that is only a partial `/name`, which Enter completes as in the chat. A
@@ -65,21 +75,18 @@ function lonePartial(value: string) {
   return at && at.query.length > 0 && value.slice(0, at.start).trim() === '' ? at.query : null
 }
 
-// The command Enter takes among the `matches` of a lone partial `query`: the first when it starts
-// with the query, none when a name is typed whole.
+// The command Enter takes among the `matches` of a lone partial `query`: the first when its name or
+// short name starts with the query, none when a name is typed whole.
 function enterTarget(query: string, matches: CommandInfo[]) {
   const [first] = matches
-  const isWhole = matches.some(one => one.name.toLowerCase() === query)
+  const isWhole = matches.some(one => nameForms(one).includes(query))
 
-  return first && !isWhole && first.name.toLowerCase().startsWith(query) ? first : null
+  return first && !isWhole && startsWith(first, query) ? first : null
 }
 
-const SOURCE_TAGS: Record<CommandInfo['source'], string> = {
-  builtin: '',
-  plugin: 'plugin',
-  user: 'user',
-  mcp: 'mcp',
-}
+// What a suggestion shows after its name: its plugin, or where it comes from; nothing for a built-in.
+const sourceTag = (command: CommandInfo) =>
+  command.plugin ?? (command.source === 'builtin' ? '' : command.source)
 
 // Sessions whose command list is kept at once; the oldest goes first.
 const MAX_CACHED_SESSIONS = 4
@@ -118,6 +125,7 @@ async function draw(
   $: EngineInterface,
   e: Parameters<EngineInterface['ui']['resolve']>[0],
   columns: number,
+  bandId: string,
 ) {
   // One memo per session id: a /clear or a resume in the same process starts on an empty one.
   const session = { requestId: await $.session.id() }
@@ -149,7 +157,12 @@ async function draw(
   const suggestions = matches.slice(0, MAX_SUGGESTIONS)
   const highlighted = token && lonePartial(text) ? enterTarget(token.query, matches) : null
 
-  const complete = (name: string) => update($, draft, value => replaceToken(value, name))
+  // The field takes the keys back, so the person goes on typing the command's arguments; where the
+  // band does not hold the keys the ring stays put.
+  const complete = async (name: string) => {
+    await update($, draft, value => replaceToken(value, name))
+    await $.ui.focus({ requestId: bandId, key: 'draft' }).catch(() => undefined)
+  }
 
   const remove = (ids: string[]) =>
     Promise.all([
@@ -395,9 +408,7 @@ async function draw(
                         wrap="truncate-end"
                       >
                         /{command.name}
-                        {SOURCE_TAGS[command.source] && (
-                          <Text dimColor> ({SOURCE_TAGS[command.source]})</Text>
-                        )}
+                        {sourceTag(command) && <Text dimColor> ({sourceTag(command)})</Text>}
                         {command.description && <Text dimColor> · {command.description}</Text>}
                       </Text>
                     </Button>
@@ -433,6 +444,6 @@ export const register: Register = on => {
       return next(e)
     }
 
-    return draw($, e, e.props.bodyColumns)
+    return draw($, e, e.props.bodyColumns, e.requestId)
   })
 }

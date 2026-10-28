@@ -116,6 +116,7 @@ test('a long prompt shows one line, unfolds whole and keeps its actions', async 
 test('a /word in the field lists matching commands and skills to complete', async ($, on) => {
   mock.clock(on)
   on('session.id', () => ({ value: 'session-slash' }))
+
   on('command.list', () => ({
     value: [
       {
@@ -129,7 +130,12 @@ test('a /word in the field lists matching commands and skills to complete', asyn
         source: 'user',
       },
       { name: 'review-later', description: 'Later', source: 'user' },
-      { name: 'code-review', description: 'Review the diff', source: 'plugin' },
+      {
+        name: 'engineering:code-review',
+        description: 'Review the diff',
+        source: 'plugin',
+        plugin: 'engineering',
+      },
       {
         name: 'resume',
         description: 'Resume a conversation',
@@ -155,7 +161,7 @@ test('a /word in the field lists matching commands and skills to complete', asyn
       'complete-review',
       'complete-review-later',
       'complete-resume',
-      'complete-code-review',
+      'complete-engineering:code-review',
     ])
 
     // Mid-prompt nothing is highlighted: Enter there adds the prompt.
@@ -184,9 +190,13 @@ test('a /word in the field lists matching commands and skills to complete', asyn
     expect(await itemRows(ui)).toHaveLength(0)
     expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/init ')
 
-    // Leading blank space still counts as a lone partial name.
-    await ui.input({ key: 'draft', text: '  /in' })
-    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('  /init ')
+    // Leading blank space still counts as a lone partial name, and is dropped.
+    await ui.input({ key: 'draft', text: '\n  /in' })
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/init ')
+
+    // A plugin's skill completes by its short name.
+    await ui.input({ key: 'draft', text: '/code-rev' })
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/engineering:code-review ')
 
     // Enter on a whole command adds it to the memo, even when longer names start with it.
     await ui.input({ key: 'draft', text: '/review' })
