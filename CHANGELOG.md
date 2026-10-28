@@ -1,21 +1,27 @@
 # Changelog
 
-Les versions suivent le champ `version` de `.claude-plugin/plugin.json`. Une installation existante récupère une nouvelle version avec `claude plugin update prompt-memo`.
+Versions follow the `version` field of `.claude-plugin/plugin.json`. An existing installation gets a new version with `claude plugin update prompt-memo`.
+
+## 0.3.1
+
+### Fixed
+- The suggestion list no longer draws over the memo's prompts, which made both unreadable. It now sits between the prompts and the field, right above the field's line, and the memo grows while it is open.
+- The field keeps the focus while the list opens and closes.
 
 ## 0.3.0
 
-### Modifié
-- Les suggestions de commandes et skills s'ouvrent juste au-dessus de la ligne du champ, par-dessus l'en-tête et les prompts du mémo, comme la liste du chat. Le mémo ne grandit que des lignes qui manquent quand il en a trop peu.
+### Changed
+- Command and skill suggestions open just above the field's line, over the memo's header and prompts, like the chat's own list. The memo only grows by the rows it lacks when it has too few.
 
 ## 0.2.0
 
-### Ajouté
-- Taper `/` dans le champ du mémo liste les commandes et skills disponibles (la même liste que le chat), filtrés au fil de la frappe : clic pour compléter ; Entrée complète un début de nom seul dans le champ (le bouton `+` devient `→`).
-- Les commandes et skills de plugin se trouvent aussi par leur nom court (`/code-review` → `/engineering:code-review`).
+### Added
+- Typing `/` in the memo's field lists the available commands and skills (the same list as the chat), filtered as you type: click to complete; Enter completes the start of a name alone in the field (the `+` button turns into `→`).
+- Plugin commands and skills can also be found by their short name (`/code-review` → `/engineering:code-review`).
 
-### Corrigé
-- Après une complétion, la frappe suivante va à la fin du texte et non plus au milieu du mot complété.
+### Fixed
+- After a completion, the next keystroke goes to the end of the text instead of the middle of the completed word.
 
 ## 0.1.0
 
-- Première version : mémo de prompts par session au-dessus du champ de chat (ajouter, envoyer, insérer, modifier, supprimer, sélection multiple, prompts longs repliés).
+- First version: a per-session prompt memo above the chat input (add, send, insert, edit, delete, multiple selection, folded long prompts).
