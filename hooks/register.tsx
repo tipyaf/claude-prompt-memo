@@ -33,12 +33,16 @@ function slashToken(text: string) {
   return match ? { start: match.index + match[1]!.length, query: match[2]!.toLowerCase() } : null
 }
 
+// Whether a command is a plugin's `plugin:name`, which carries its plugin in its name.
+const isPluginNamed = (command: CommandInfo) =>
+  command.source === 'plugin' && command.name.includes(':')
+
 // A plugin command or skill's short names, lowercased: after the plugin's colon and, for a nested
 // `plugin:dir:name`, its last part too. None for any other command, so a user's `dir:command` or an
 // MCP prompt is matched by its full name alone.
 function shortNames(command: CommandInfo) {
   const name = command.name.toLowerCase()
-  if (command.source !== 'plugin' || !name.includes(':')) {
+  if (!isPluginNamed(command)) {
     return []
   }
 
@@ -115,7 +119,7 @@ function enterTarget(query: string, matches: CommandInfo[]) {
 // What a suggestion shows after its name: nothing for a built-in or a `plugin:skill` that names its
 // plugin already, else its plugin or where it comes from.
 function sourceTag(command: CommandInfo) {
-  if (command.source === 'builtin' || (command.source === 'plugin' && command.name.includes(':'))) {
+  if (command.source === 'builtin' || isPluginNamed(command)) {
     return ''
   }
 
@@ -132,8 +136,9 @@ const firstLine = (text: string) =>
 // Sessions whose command list is kept at once; the oldest goes first.
 const MAX_CACHED_SESSIONS = 4
 
-// Each session's command list, read once each time a `/word` starts and dropped when it ends; a
-// listing that fails is dropped too, so the next keystroke asks again.
+// Each session's command list, read when the draft gets a trailing `/word` and dropped by a draw
+// whose draft has none, so one `/word` replacing another keeps it; a listing that fails is dropped
+// too, so the next keystroke asks again.
 const commandsBySession = new Map<string, Promise<CommandInfo[]>>()
 
 function commands($: EngineInterface, sessionId: string) {
