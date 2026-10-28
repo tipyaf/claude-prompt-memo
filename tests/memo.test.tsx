@@ -156,9 +156,11 @@ test('a /word in the field lists matching commands and skills to complete', asyn
     await ui.input({ key: 'draft', text: '/review' })
     expect(await itemRows(ui)).toHaveLength(1)
 
-    // A /word later in a prompt (a path) is saved as typed.
+    // A /word later in a prompt (a path), a bare / and a word no name starts with are saved as typed.
     await ui.input({ key: 'draft', text: 'lis le fichier /re' })
-    expect(await itemRows(ui)).toHaveLength(2)
+    await ui.input({ key: 'draft', text: '/' })
+    await ui.input({ key: 'draft', text: '/view' })
+    expect(await itemRows(ui)).toHaveLength(4)
 
     for (const row of await itemRows(ui)) {
       await ui.press({ key: row.key!.replace('press-', 'delete-') })

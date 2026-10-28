@@ -51,19 +51,28 @@ function matchCommands(commands: CommandInfo[], query: string) {
   return [...starts, ...contains]
 }
 
-// What Enter makes of a draft that is only a partial `/command`: the first match in its place, as
-// in the chat. A `/word` later in a prompt (a path, a fraction) or a whole command name is saved.
-function completeOnEnter(value: string, commands: CommandInfo[]) {
+// The draft with its trailing `/word` replaced by `/name `.
+function replaceToken(value: string, name: string) {
   const at = slashToken(value)
-  if (!at || at.start !== 0) {
-    return null
-  }
-  const matches = matchCommands(commands, at.query)
-  if (matches.length === 0 || matches.some(one => one.name.toLowerCase() === at.query)) {
+
+  return at ? `${value.slice(0, at.start)}/${name} ` : value
+}
+
+// A draft that is only a partial `/command`, which Enter completes to the first name starting with
+// it, as in the chat. A `/word` later in a prompt (a path, a fraction) or a bare `/` is saved.
+function partialCommand(value: string) {
+  const at = slashToken(value)
+
+  return at && at.start === 0 && at.query.length > 0 ? at.query : null
+}
+
+function completeOnEnter(value: string, query: string, commands: CommandInfo[]) {
+  const starts = commands.filter(one => one.name.toLowerCase().startsWith(query))
+  if (starts.length === 0 || starts.some(one => one.name.toLowerCase() === query)) {
     return null
   }
 
-  return `/${matches[0]!.name} `
+  return replaceToken(value, starts[0]!.name)
 }
 
 const SOURCE_TAGS: Record<CommandInfo['source'], string> = {
@@ -73,17 +82,26 @@ const SOURCE_TAGS: Record<CommandInfo['source'], string> = {
   mcp: 'mcp',
 }
 
-// The command list per session, read once each time a `/word` starts and dropped when it ends.
-const commandsBySession = new Map<string, CommandInfo[]>()
+// The command list of one session, read once each time a `/word` starts and dropped when it ends;
+// a listing that fails is dropped too, so the next keystroke asks again.
+let commandsCache: { sessionId: string; list: Promise<CommandInfo[]> } | null = null
 
-async function commands($: EngineInterface, sessionId: string) {
-  let list = commandsBySession.get(sessionId)
-  if (!list) {
-    list = await $.command.list().catch(() => [])
-    commandsBySession.set(sessionId, list)
+function commands($: EngineInterface, sessionId: string) {
+  if (commandsCache?.sessionId !== sessionId) {
+    const entry = {
+      sessionId,
+      list: $.command.list().catch(() => {
+        if (commandsCache === entry) {
+          commandsCache = null
+        }
+
+        return []
+      }),
+    }
+    commandsCache = entry
   }
 
-  return list
+  return commandsCache.list
 }
 
 let lastPress: { id: string; at: number } | null = null
@@ -114,20 +132,15 @@ async function draw(
   const opened = await read($, expanded)
   const textWidth = Math.max(12, columns - ROW_CHROME_COLUMNS)
   const isLong = (item: MemoItem) => preview(item.text, textWidth) !== item.text
-  const token = collapsed ? null : slashToken(text)
+  const token = collapsed || !Input ? null : slashToken(text)
   if (!token) {
-    commandsBySession.delete(session.requestId)
+    commandsCache = null
   }
   const suggestions = token
     ? matchCommands(await commands($, session.requestId), token.query).slice(0, MAX_SUGGESTIONS)
     : []
 
-  const complete = (name: string) =>
-    update($, draft, value => {
-      const at = slashToken(value)
-
-      return at ? `${value.slice(0, at.start)}/${name} ` : value
-    })
+  const complete = (name: string) => update($, draft, value => replaceToken(value, name))
 
   const remove = (ids: string[]) =>
     Promise.all([
@@ -153,13 +166,14 @@ async function draw(
     if (value.trim().length === 0) {
       return
     }
-    const completed = completeOnEnter(value, await commands($, session.requestId))
+    const id = await read($, editingId)
+    const query = id ? null : partialCommand(value)
+    const completed = query && completeOnEnter(value, query, await commands($, session.requestId))
     if (completed) {
       await update($, draft, () => completed)
 
       return
     }
-    const id = await read($, editingId)
     if (id) {
       await update($, items, all => all.map(one => (one.id === id ? { ...one, text: value } : one)))
       await update($, editingId, () => null)
