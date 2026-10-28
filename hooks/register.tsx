@@ -43,17 +43,17 @@ function shortName(command: CommandInfo) {
 const startsWith = (command: CommandInfo, query: string) =>
   command.name.toLowerCase().startsWith(query) || shortName(command).startsWith(query)
 
-// Commands and skills matching `query`, one per name: names starting with it first, then plugin
-// skills whose short name does, then names containing it.
+// Commands and skills matching `query`, one per name whatever its case: names starting with it
+// first, then plugin skills whose short name does, then names containing it.
 function matchCommands(commands: CommandInfo[], query: string) {
   const seen = new Set<string>()
   const groups: [CommandInfo[], CommandInfo[], CommandInfo[]] = [[], [], []]
   for (const one of commands) {
     const name = one.name.toLowerCase()
-    if (seen.has(one.name) || !name.includes(query)) {
+    if (seen.has(name) || !name.includes(query)) {
       continue
     }
-    seen.add(one.name)
+    seen.add(name)
     groups[name.startsWith(query) ? 0 : shortName(one).startsWith(query) ? 1 : 2].push(one)
   }
 
@@ -172,7 +172,9 @@ async function draw(
   }
   const matches = token ? matchCommands(await commands($, session.requestId), token.query) : []
   const suggestions = matches.slice(0, MAX_SUGGESTIONS)
-  const highlighted = token && lonePartial(text, token) ? enterTarget(token.query, matches) : null
+  // Enter only ever takes a row the person can see.
+  const highlighted =
+    token && lonePartial(text, token) ? enterTarget(token.query, suggestions) : null
 
   // The field takes the keys back, so the person goes on typing the command's arguments; where the
   // band does not hold the keys the ring stays put.
@@ -207,9 +209,12 @@ async function draw(
     }
     const id = await read($, editingId)
     const query = id ? null : lonePartial(value)
+    // The draft as Enter found it, when the list is read before acting on it.
+    let before: string | undefined
     if (query) {
-      const before = await read($, draft)
-      const command = enterTarget(query, matchCommands(await commands($, session.requestId), query))
+      before = await read($, draft)
+      const listed = await commands($, session.requestId)
+      const command = enterTarget(query, matchCommands(listed, query).slice(0, MAX_SUGGESTIONS))
       if (command) {
         // Text typed while the list was read wins over the completion.
         await update($, draft, current =>
@@ -227,7 +232,10 @@ async function draw(
       const item: MemoItem = { id: `${await $.clock.now()}-${counter}`, text: value }
       await update($, items, all => [...all, item])
     }
-    await update($, draft, () => '')
+    // Text typed while the list was read stays in the field.
+    await update($, draft, current =>
+      before === undefined || current === before || current === value ? '' : current,
+    )
   }
 
   const pressItem = async (item: MemoItem) => {
