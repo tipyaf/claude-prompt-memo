@@ -143,6 +143,7 @@ test('a /word in the field lists matching commands and skills to complete', asyn
       },
       { name: 'code-review-strict', description: 'Strict review', source: 'user' },
       { name: 'frontend:component', description: 'A user command in a folder', source: 'user' },
+      { name: 'x:init', description: 'A skill named like a built-in', source: 'plugin' },
       { name: 'init', description: 'Write CLAUDE.md', source: 'builtin' },
     ],
   }))
@@ -213,12 +214,15 @@ test('a /word in the field lists matching commands and skills to complete', asyn
     // Enter on a whole command adds it to the memo, even when longer names start with it.
     await ui.input({ key: 'draft', text: '/review' })
     expect(await itemRows(ui)).toHaveLength(1)
+    // A whole full name wins over a plugin skill whose short name equals it.
+    await ui.input({ key: 'draft', text: '/init' })
+    expect(await itemRows(ui)).toHaveLength(2)
 
     // A /word later in a prompt (a path), a bare / and a word no name starts with are saved as typed.
     await ui.input({ key: 'draft', text: 'lis le fichier /re' })
     await ui.input({ key: 'draft', text: '/' })
     await ui.input({ key: 'draft', text: '/view' })
-    expect(await itemRows(ui)).toHaveLength(4)
+    expect(await itemRows(ui)).toHaveLength(5)
 
     // An edit shows no suggestions and Enter saves the text as it is.
     const first = (await itemRows(ui))[0]!.key!

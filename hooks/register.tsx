@@ -98,18 +98,13 @@ function lonePartial(value: string, at = slashToken(value)) {
   return at && at.query.length > 0 && isLone(value, at.start) ? at.query : null
 }
 
-// The command Enter takes among the `matches` of a lone partial `query`: none when a full name is
-// typed whole, the skill whose short name is typed whole, else the first match starting with it.
+// The command Enter takes among the ranked `matches` of a lone partial `query`: the first, unless
+// its full name is typed whole (saved as typed) or it only contains the query.
 function enterTarget(query: string, matches: CommandInfo[]) {
-  if (matches.some(one => one.name.toLowerCase() === query)) {
-    return null
-  }
   const [first] = matches
+  const rank = first ? rankOf(first, query) : null
 
-  return (
-    matches.find(one => shortName(one) === query) ??
-    (first && isPrefixRank(rankOf(first, query)) ? first : null)
-  )
+  return rank !== null && rank > 0 && isPrefixRank(rank) ? first! : null
 }
 
 // What a suggestion shows after its name: nothing for a built-in or a `plugin:skill` that names its
