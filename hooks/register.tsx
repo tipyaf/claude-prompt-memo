@@ -1,5 +1,5 @@
 import { atom, memberOf, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { CommandInfo, EngineInterface, Register } from 'claude-code'
 
 import type { MemoItem } from '../types'
 
@@ -21,6 +21,45 @@ function preview(text: string, width: number) {
   const isCut = first.length > width || text.includes('\n')
 
   return isCut ? `${first.slice(0, Math.max(1, width - 1))}…` : first
+}
+
+// Rows the slash typeahead under the field shows at most, and how long a command list is reused.
+const MAX_SUGGESTIONS = 8
+const COMMANDS_TTL_MS = 5000
+
+// The `/word` being typed at the end of the draft, as the chat's typeahead reads it.
+function slashToken(text: string) {
+  const match = /(^|\s)\/([^\s/]*)$/.exec(text)
+
+  return match ? { start: match.index + match[1]!.length, query: match[2]!.toLowerCase() } : null
+}
+
+// Commands and skills matching `query`: names starting with it first, then names containing it.
+function matchCommands(commands: CommandInfo[], query: string) {
+  const starts = commands.filter(one => one.name.toLowerCase().startsWith(query))
+  const contains = commands.filter(
+    one => !one.name.toLowerCase().startsWith(query) && one.name.toLowerCase().includes(query),
+  )
+
+  return [...starts, ...contains].slice(0, MAX_SUGGESTIONS)
+}
+
+const SOURCE_TAGS: Record<CommandInfo['source'], string> = {
+  builtin: '',
+  plugin: 'plugin',
+  user: 'user',
+  mcp: 'mcp',
+}
+
+let commandsCache: { at: number; list: CommandInfo[] } | null = null
+
+async function commands($: EngineInterface) {
+  const now = await $.clock.now()
+  if (!commandsCache || now - commandsCache.at > COMMANDS_TTL_MS) {
+    commandsCache = { at: now, list: await $.command.list() }
+  }
+
+  return commandsCache.list
 }
 
 let lastPress: { id: string; at: number } | null = null
@@ -51,6 +90,15 @@ async function draw(
   const opened = await read($, expanded)
   const textWidth = Math.max(12, columns - ROW_CHROME_COLUMNS)
   const isLong = (item: MemoItem) => preview(item.text, textWidth) !== item.text
+  const token = collapsed ? null : slashToken(text)
+  const suggestions = token ? matchCommands(await commands($), token.query) : []
+
+  const complete = (name: string) =>
+    update($, draft, value => {
+      const at = slashToken(value)
+
+      return at ? `${value.slice(0, at.start)}/${name} ` : value
+    })
 
   const remove = (ids: string[]) =>
     Promise.all([
@@ -75,6 +123,16 @@ async function draw(
   const save = async (value: string) => {
     if (value.trim().length === 0) {
       return
+    }
+    // Enter on a partial `/command` takes the first suggestion, as in the chat.
+    const at = slashToken(value)
+    if (at) {
+      const matches = matchCommands(await commands($), at.query)
+      if (matches.length > 0 && !matches.some(one => one.name.toLowerCase() === at.query)) {
+        await update($, draft, () => `${value.slice(0, at.start)}/${matches[0]!.name} `)
+
+        return
+      }
     }
     const id = await read($, editingId)
     if (id) {
@@ -271,6 +329,25 @@ async function draw(
                 onInput={(value: string) => update($, draft, () => value)}
                 onSubmit={(value: string) => save(value)}
               />
+              {suggestions.length > 0 && (
+                <Box flexDirection="column" paddingLeft={1}>
+                  {suggestions.map((command, index) => (
+                    <Button
+                      key={`complete-${command.name}`}
+                      plain
+                      onPress={() => complete(command.name)}
+                    >
+                      <Text color={index === 0 ? 'suggestion' : undefined} wrap="truncate-end">
+                        /{command.name}
+                        {SOURCE_TAGS[command.source] && (
+                          <Text dimColor> ({SOURCE_TAGS[command.source]})</Text>
+                        )}
+                        {command.description && <Text dimColor> · {command.description}</Text>}
+                      </Text>
+                    </Button>
+                  ))}
+                </Box>
+              )}
               {editing && (
                 <Box justifyContent="flex-end">
                   <Button

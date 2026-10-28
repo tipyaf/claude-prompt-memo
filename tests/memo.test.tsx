@@ -112,3 +112,44 @@ test('a long prompt shows one line, unfolds whole and keeps its actions', async 
     await ui.unmount()
   }
 })
+
+test('a /word in the field lists matching commands and skills to complete', async ($, on) => {
+  mock.clock(on)
+  on('session.id', () => ({ value: 'session-slash' }))
+  on('command.list', () => ({
+    value: [
+      { name: 'review', description: 'Review a pull request', source: 'builtin' },
+      { name: 'code-review', description: 'Review the diff', source: 'plugin' },
+      { name: 'resume', description: 'Resume a conversation', source: 'builtin' },
+      { name: 'init', description: 'Write CLAUDE.md', source: 'builtin' },
+    ],
+  }))
+
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...BAND, surface })
+    const rows = async () =>
+      (await ui.findAll({ type: 'Button' }))
+        .map(row => row.key ?? '')
+        .filter(key => key.startsWith('complete-'))
+
+    await ui.input({ key: 'draft', text: 'fais ceci puis /re', kind: 'change' })
+    expect(await rows()).toEqual(['complete-review', 'complete-resume', 'complete-code-review'])
+
+    // A press replaces the /word and closes the list.
+    await ui.press({ key: 'complete-resume' })
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('fais ceci puis /resume ')
+    expect(await rows()).toEqual([])
+
+    // Enter on a partial name takes the first match instead of adding the prompt.
+    await ui.input({ key: 'draft', text: '/in' })
+    expect(await itemRows(ui)).toHaveLength(0)
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/init ')
+
+    // Enter on a whole command adds it to the memo.
+    await ui.input({ key: 'draft', text: '/init' })
+    expect(await itemRows(ui)).toHaveLength(1)
+
+    await ui.press({ key: (await itemRows(ui))[0]!.key!.replace('press-', 'delete-') })
+    await ui.unmount()
+  }
+})
