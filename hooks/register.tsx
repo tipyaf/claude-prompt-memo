@@ -38,7 +38,7 @@ function slashToken(text: string) {
 function shortName(command: CommandInfo) {
   const name = command.name.toLowerCase()
 
-  return command.source === 'plugin' ? name.slice(name.lastIndexOf(':') + 1) : name
+  return command.source === 'plugin' ? name.slice(name.indexOf(':') + 1) : name
 }
 
 // How well a command matches `query`, best first: its name (0) or short name (1) equal to it, its
@@ -56,9 +56,6 @@ function rankOf(command: CommandInfo, query: string) {
 
   return rank < 0 ? null : rank
 }
-
-// The ranks above at which a name or short name equals or starts with the query: Enter's to take.
-const isPrefixRank = (rank: number | null) => rank !== null && rank <= 3
 
 // Commands and skills matching `query`, best rank first, one per name whatever its case.
 function matchCommands(commands: CommandInfo[], query: string) {
@@ -98,13 +95,14 @@ function lonePartial(value: string, at = slashToken(value)) {
   return at && at.query.length > 0 && isLone(value, at.start) ? at.query : null
 }
 
-// The command Enter takes among the ranked `matches` of a lone partial `query`: the first, unless
-// its full name is typed whole (saved as typed) or it only contains the query.
+// The command Enter takes among the ranked `matches` of a lone partial `query`: the first when it
+// ranks 1 to 3 in rankOf, so not when its full name is typed whole (saved as typed, rank 0) or when
+// it only contains the query (rank 4).
 function enterTarget(query: string, matches: CommandInfo[]) {
   const [first] = matches
   const rank = first ? rankOf(first, query) : null
 
-  return rank !== null && rank > 0 && isPrefixRank(rank) ? first! : null
+  return rank !== null && rank >= 1 && rank <= 3 ? first! : null
 }
 
 // What a suggestion shows after its name: nothing for a built-in or a `plugin:skill` that names its
@@ -198,9 +196,7 @@ async function draw(
   }
   const matches = token ? matchCommands(await commands($, session.requestId), token.query) : []
   const suggestions = matches.slice(0, MAX_SUGGESTIONS)
-  // Enter only ever takes a row the person can see.
-  const highlighted =
-    token && lonePartial(text, token) ? enterTarget(token.query, suggestions) : null
+  const highlighted = token && lonePartial(text, token) ? enterTarget(token.query, matches) : null
 
   // The field takes the keys back, so the person goes on typing the command's arguments; where the
   // band does not hold the keys the ring stays put.
@@ -242,7 +238,7 @@ async function draw(
     if (query) {
       before = await read($, draft)
       const listed = await commands($, session.requestId)
-      const command = enterTarget(query, matchCommands(listed, query).slice(0, MAX_SUGGESTIONS))
+      const command = enterTarget(query, matchCommands(listed, query))
       if (command) {
         // Text typed while the list was read wins over the completion.
         await update($, draft, current =>
