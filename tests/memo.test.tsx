@@ -281,7 +281,7 @@ test('the list shows eight one-line rows', async ($, on) => {
   on('session.id', () => ({ value: 'session-many' }))
   const many = Array.from({ length: 10 }, (_, i) => ({
     name: `deploy-${i}`,
-    description: `Line one\nline two ${i}`,
+    description: `\r\nLine one\r\nline two ${i}`,
     source: 'user' as const,
   }))
   on('command.list', () => ({
@@ -294,7 +294,7 @@ test('the list shows eight one-line rows', async ($, on) => {
     row.key?.startsWith('complete-'),
   )
   expect(rows).toHaveLength(8)
-  expect(rows[0]!.text).not.toMatch(/line two/)
+  expect(rows[0]!.text).toMatch(/· Line one$/)
 
   // Narrowed to the skill matching by short name, Enter completes to its full name.
   await ui.input({ key: 'draft', text: '/deploy-l' })

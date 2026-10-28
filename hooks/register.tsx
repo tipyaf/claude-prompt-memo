@@ -110,15 +110,18 @@ function enterTarget(query: string, matches: CommandInfo[]) {
   )
 }
 
-// What a suggestion shows after its name: its plugin, unless the name already starts with it, or
-// where it comes from; nothing for a built-in.
+// What a suggestion shows after its name: nothing for a built-in or a `plugin:skill` that names its
+// plugin already, else its plugin or where it comes from.
 function sourceTag(command: CommandInfo) {
-  if (command.plugin) {
-    return command.name.startsWith(`${command.plugin}:`) ? '' : command.plugin
+  if (command.source === 'builtin' || (command.source === 'plugin' && command.name.includes(':'))) {
+    return ''
   }
 
-  return command.source === 'builtin' ? '' : command.source
+  return command.plugin ?? command.source
 }
+
+// A description's first line with text, for a suggestion row that stays one line.
+const firstLine = (text: string) => text.split(/\r?\n/).find(line => line.trim() !== '') ?? ''
 
 // Sessions whose command list is kept at once; the oldest goes first.
 const MAX_CACHED_SESSIONS = 4
@@ -462,8 +465,8 @@ async function draw(
                         >
                           /{command.name}
                           {tag ? <Text dimColor> ({tag})</Text> : null}
-                          {command.description ? (
-                            <Text dimColor> · {command.description.split('\n')[0]}</Text>
+                          {firstLine(command.description) ? (
+                            <Text dimColor> · {firstLine(command.description)}</Text>
                           ) : null}
                         </Text>
                       </Button>
