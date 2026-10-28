@@ -1,55 +1,57 @@
 # prompt-memo
 
-Un mod Claude Code qui garde, pour chaque session, une liste de prompts à lancer plus tard. Le mémo s'affiche en permanence juste au-dessus du champ de chat.
+A Claude Code mod that keeps, for each session, a list of prompts to run later. The memo is always shown just above the chat input.
 
-## Fonctionnement
+The memo's on-screen labels are in French; this README quotes them as they appear.
 
-- **Ajouter** : écris ou colle un prompt (plusieurs lignes possibles) dans le champ du mémo, puis Entrée ou `+`.
-- **Commandes et skills** : comme dans le chat, taper `/` dans le champ du mémo ouvre, juste au-dessus du champ et par-dessus les prompts du mémo, la liste des commandes et skills disponibles, filtrés au fil de la frappe (le mémo s'agrandit si ses lignes ne suffisent pas). Clic sur une ligne pour compléter.
-  - Quand le champ ne contient qu'un début de nom (`/rev`), Entrée prend la suggestion surlignée (le bouton `+` du champ devient `→`), dans cet ordre : un nom court de commande ou skill de plugin tapé en entier (`/code-review` devient `/engineering:code-review` ; pour `plugin:dossier:nom`, `dossier:nom` et `nom` sont des noms courts), puis un nom complet qui commence ainsi, puis un nom court qui commence ainsi.
-  - Un nom complet tapé en entier, un `/mot` qui n'apparaît qu'au milieu d'un nom, ou un `/mot` plus loin dans le texte (un chemin, par exemple) sont ajoutés tels quels.
-  - Seul le `/mot` en fin de texte est complété : le champ ne donne pas la position du curseur.
-  - Pendant la modification d'un item (`✎`), pas de suggestions : Entrée enregistre le texte tel quel.
-- **Actions par item** :
-  - `↑ envoyer` lance le prompt dans le chat et le retire du mémo ;
-  - `↵ insérer` le colle dans la zone de saisie, au curseur ;
-  - `✎` le remet dans le champ pour le modifier (`✓` pour enregistrer, `Annuler` pour abandonner) ;
-  - `✕` le supprime.
-- **Clic** sur un item : le sélectionne (○ / ●). Avec une sélection, l'en-tête propose **Insérer** et **Envoyer** pour plusieurs prompts à la fois, séparés par une ligne vide.
-- **Double-clic** sur un item : l'insère dans le chat et le retire du mémo.
-- **Prompts longs** : une seule ligne, coupée avec `…`, pour que les actions restent visibles. `▸` / `▾` déplie ou replie le texte complet.
-- **Replier / déplier** le mémo entier avec `▾ Mémo` dans l'en-tête.
+## How it works
 
-Chaque session a son propre mémo : une nouvelle session ou un `/clear` repart d'une liste vide. Le mémo est gardé tant que l'app tourne, pas après un redémarrage.
+- **Add**: type or paste a prompt (several lines are fine) in the memo's field, then press Enter or `+`.
+- **Commands and skills**: as in the chat, typing `/` in the memo's field opens the list of available commands and skills just above the field, over the memo's prompts, filtered as you type (the memo grows when its own rows are not enough). Click a row to complete it.
+  - When the field holds only the start of a name (`/rev`), Enter takes the highlighted suggestion (the field's `+` button turns into `→`), in this order: a plugin command's or skill's short name typed in full (`/code-review` becomes `/engineering:code-review`; for `plugin:folder:name`, both `folder:name` and `name` are short names), then a full name starting that way, then a short name starting that way.
+  - A full name typed in full, a `/word` that only appears in the middle of a name, or a `/word` later in the text (a path, for example) is added as typed.
+  - Only the `/word` at the end of the text is completed: the field does not report the cursor position.
+  - While an item is being edited (`✎`), no suggestions show: Enter saves the text as it is.
+- **Item actions**:
+  - `↑ envoyer` sends the prompt to the chat and removes it from the memo;
+  - `↵ insérer` pastes it into the chat input, at the cursor;
+  - `✎` puts it back in the field to edit it (`✓` to save, `Annuler` to cancel);
+  - `✕` deletes it.
+- **Click** an item to select it (○ / ●). With a selection, the header offers **Insérer** (insert) and **Envoyer** (send) for several prompts at once, separated by a blank line.
+- **Double-click** an item to insert it into the chat and remove it from the memo.
+- **Long prompts** show on one line, cut with `…`, so the actions stay visible. `▸` / `▾` unfolds or folds the full text.
+- **Collapse / expand** the whole memo with `▾ Mémo` in the header.
+
+Each session has its own memo: a new session or a `/clear` starts from an empty list. The memo is kept while the app runs, not across a restart.
 
 ## Installation
 
-À l'invite d'une session Claude Code dans un terminal :
+At the prompt of a Claude Code session in a terminal:
 
 ```
 /plugin install prompt-memo --marketplace tipyaf/claude-prompt-memo
 ```
 
-Réponds `y` pour ajouter la marketplace, puis choisis la portée de l'installation.
+Answer `y` to add the marketplace, then choose the installation scope.
 
-Depuis un shell :
+From a shell:
 
 ```bash
 claude plugin install prompt-memo --marketplace tipyaf/claude-prompt-memo
 ```
 
-## Mise à jour
+## Updating
 
 ```bash
 claude plugin update prompt-memo
 ```
 
-Puis `/reload-plugins` dans la session, ou une nouvelle session. Les nouveautés de chaque version sont dans le [CHANGELOG](CHANGELOG.md).
+Then run `/reload-plugins` in the session, or start a new session. What each version brings is in the [CHANGELOG](CHANGELOG.md).
 
-## Développement
+## Development
 
 ```bash
-claude --plugin-dir /chemin/vers/claude-prompt-memo
+claude --plugin-dir /path/to/claude-prompt-memo
 claude plugin validate .
 claude plugin test .
 ```
