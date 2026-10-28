@@ -112,3 +112,216 @@ test('a long prompt shows one line, unfolds whole and keeps its actions', async 
     await ui.unmount()
   }
 })
+
+test('a /word in the field lists matching commands and skills to complete', async ($, on) => {
+  mock.clock(on)
+  on('session.id', () => ({ value: 'session-slash' }))
+
+  on('command.list', () => ({
+    value: [
+      {
+        name: 'review',
+        description: 'Review a pull request',
+        source: 'builtin',
+      },
+      {
+        name: 'review',
+        description: 'Same name, another source',
+        source: 'user',
+      },
+      { name: 'review-later', description: 'Later', source: 'user' },
+      {
+        name: 'engineering:code-review',
+        description: 'Review the diff',
+        source: 'plugin',
+        plugin: 'engineering',
+      },
+      {
+        name: 'resume',
+        description: 'Resume a conversation',
+        source: 'builtin',
+      },
+      { name: 'code-review-strict', description: 'Strict review', source: 'user' },
+      { name: 'frontend:component', description: 'A user command in a folder', source: 'user' },
+      { name: 'x:init', description: 'A skill named like a built-in', source: 'plugin' },
+      { name: 'tools:git:commit', description: 'A nested plugin command', source: 'plugin' },
+      { name: 'init', description: 'Write CLAUDE.md', source: 'builtin' },
+    ],
+  }))
+
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...BAND, surface })
+    const rows = async () =>
+      (await ui.findAll({ type: 'Button' }))
+        .map(row => row.key ?? '')
+        .filter(key => key.startsWith('complete-'))
+
+    await ui.input({
+      key: 'draft',
+      text: 'fais ceci puis /re',
+      kind: 'change',
+    })
+    expect(await rows()).toEqual([
+      'complete-review',
+      'complete-review-later',
+      'complete-resume',
+      'complete-engineering:code-review',
+      'complete-code-review-strict',
+    ])
+
+    // Mid-prompt nothing is highlighted: Enter there adds the prompt.
+    const color = async (name: string) => {
+      const [label] = (await ui.find({ key: `complete-${name}` }))?.children ?? []
+
+      return (label as { props?: { color?: string } } | undefined)?.props?.color
+    }
+    expect(await color('review')).toBeUndefined()
+    await ui.input({ key: 'draft', text: '/re', kind: 'change' })
+    expect(await color('review')).toBe('suggestion')
+    expect((await ui.find({ key: 'draft' }))?.props?.submitLabel).toBe('→')
+    expect(await color('resume')).toBeUndefined()
+
+    await ui.input({
+      key: 'draft',
+      text: '\n  fais ceci puis /re',
+      kind: 'change',
+    })
+    // A press replaces the /word, keeps the text before it as typed and closes the list.
+    await ui.press({ key: 'complete-resume' })
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('\n  fais ceci puis /resume ')
+    expect(await rows()).toEqual([])
+
+    // Enter on a partial name alone in the field takes the first match instead of adding it.
+    await ui.input({ key: 'draft', text: '/in' })
+    expect(await itemRows(ui)).toHaveLength(0)
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/init ')
+
+    // Leading blank space still counts as a lone partial name, and is dropped.
+    await ui.input({ key: 'draft', text: '\n  /in' })
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/init ')
+
+    // A full name starting with the query ranks before a plugin skill's short name...
+    await ui.input({ key: 'draft', text: '/code-rev' })
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/code-review-strict ')
+    // ...but a short name typed whole completes to that skill.
+    await ui.input({ key: 'draft', text: '/code-review' })
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/engineering:code-review ')
+
+    // A nested plugin command completes by its last part.
+    await ui.input({ key: 'draft', text: '/commit' })
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/tools:git:commit ')
+
+    // A user command's folder prefix is no short name: /component is saved as typed.
+    await ui.input({ key: 'draft', text: '/component' })
+    expect(await itemRows(ui)).toHaveLength(1)
+    await ui.press({ key: (await itemRows(ui))[0]!.key!.replace('press-', 'delete-') })
+
+    // Enter on a whole command adds it to the memo, even when longer names start with it.
+    await ui.input({ key: 'draft', text: '/review' })
+    expect(await itemRows(ui)).toHaveLength(1)
+    // A whole full name wins over a plugin skill whose short name equals it.
+    await ui.input({ key: 'draft', text: '/init' })
+    expect(await itemRows(ui)).toHaveLength(2)
+
+    // A /word later in a prompt (a path), a bare / and a word no name starts with are saved as typed.
+    await ui.input({ key: 'draft', text: 'lis le fichier /re' })
+    await ui.input({ key: 'draft', text: '/' })
+    await ui.input({ key: 'draft', text: '/view' })
+    expect(await itemRows(ui)).toHaveLength(5)
+
+    // An edit shows no suggestions and Enter saves the text as it is.
+    const first = (await itemRows(ui))[0]!.key!
+    await ui.press({ key: first.replace('press-', 'edit-') })
+    await ui.input({ key: 'draft', text: '/in', kind: 'change' })
+    expect(await rows()).toEqual([])
+    await ui.input({ key: 'draft', text: '/in' })
+    expect((await ui.find({ key: first }))?.text).toMatch(/\/in$/)
+
+    for (const row of await itemRows(ui)) {
+      await ui.press({ key: row.key!.replace('press-', 'delete-') })
+    }
+    await ui.unmount()
+  }
+})
+
+test('the memo still draws when the command list fails', async ($, on) => {
+  mock.clock(on)
+  on('session.id', () => ({ value: 'session-no-commands' }))
+  on('command.list', () => {
+    throw new Error('no listing here')
+  })
+
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...BAND, surface })
+    await ui.input({ key: 'draft', text: '/re', kind: 'change' })
+    expect(await ui.find({ key: 'toggle' })).toBeDefined()
+    await ui.input({ key: 'draft', text: '/re' })
+    expect(await itemRows(ui)).toHaveLength(1)
+    await ui.press({
+      key: (await itemRows(ui))[0]!.key!.replace('press-', 'delete-'),
+    })
+    await ui.unmount()
+  }
+})
+
+test('a listing that failed is asked again on the next keystroke', async ($, on) => {
+  mock.clock(on)
+  on('session.id', () => ({ value: 'session-retry' }))
+  let calls = 0
+  on('command.list', () => {
+    calls += 1
+    if (calls === 1) {
+      throw new Error('not yet')
+    }
+
+    return { value: [{ name: 'init', description: 'Write CLAUDE.md', source: 'builtin' }] }
+  })
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.input({ key: 'draft', text: '/i', kind: 'change' })
+  expect(await ui.find({ key: 'complete-init' })).toBeUndefined()
+  await ui.input({ key: 'draft', text: '/in', kind: 'change' })
+  expect(await ui.find({ key: 'complete-init' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the list shows eight one-line rows', async ($, on) => {
+  mock.clock(on)
+  on('session.id', () => ({ value: 'session-many' }))
+  const many = Array.from({ length: 10 }, (_, i) => ({
+    name: `deploy-${i}`,
+    description: `\r\n  Line one\rline two ${i}`,
+    source: 'user' as const,
+  }))
+  on('command.list', () => ({
+    value: [...many, { name: 'x:deploy-later', description: '', source: 'plugin', plugin: 'x' }],
+  }))
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.input({ key: 'draft', text: '/deploy-', kind: 'change' })
+  const rows = (await ui.findAll({ type: 'Button' })).filter(row =>
+    row.key?.startsWith('complete-'),
+  )
+  expect(rows).toHaveLength(8)
+  expect(rows[0]!.text).toBe('/deploy-0 (user) · Line one')
+
+  // Narrowed to the skill matching by short name, Enter completes to its full name.
+  await ui.input({ key: 'draft', text: '/deploy-l' })
+  expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/x:deploy-later ')
+  await ui.unmount()
+})
+
+test('a long description is cut so a row stays one line', async ($, on) => {
+  mock.clock(on)
+  on('session.id', () => ({ value: 'session-long-description' }))
+  on('command.list', () => ({
+    value: [{ name: 'deploy', description: 'mot '.repeat(60), source: 'builtin' }],
+  }))
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.input({ key: 'draft', text: '/dep', kind: 'change' })
+  const row = await ui.find({ key: 'complete-deploy' })
+  expect(row!.text).toMatch(/^\/deploy · mot .*…$/)
+  expect(row!.text.length).toBe(BAND.props.bodyColumns - 6)
+  await ui.unmount()
+})
