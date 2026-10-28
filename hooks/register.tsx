@@ -27,6 +27,8 @@ function preview(text: string, width: number) {
 
 // Rows the slash typeahead under the field shows at most.
 const MAX_SUGGESTIONS = 8
+// Long enough for the band to draw one frame between two focus moves.
+const FRAME_MS = 50
 
 // The `/word` being typed at the end of the draft, as the chat's typeahead reads it.
 function slashToken(text: string) {
@@ -221,13 +223,26 @@ async function draw(
   const suggestions = matches.slice(0, MAX_SUGGESTIONS)
   const highlighted = token && lonePartial(text, token) ? enterTarget(token.query, matches) : null
 
-  // The field takes the keys back, so the person goes on typing the command's arguments; where the
-  // band does not hold the keys the ring stays put.
+  // Puts the field's cursor after a completion, so the person goes on typing the command's
+  // arguments. The field keeps its cursor when its text is replaced and moves it to the end only when
+  // it takes the focus, so the ring steps onto the toggle for one frame and back. Where the band does
+  // not hold the keys the ring stays put.
+  const cursorToEnd = async () => {
+    const focus = (key: string) =>
+      Promise.resolve()
+        .then(() => $.ui.focus({ requestId: bandId, key }))
+        .catch(() => undefined)
+    await focus('toggle')
+    // A wait cut short (the mod unloading) leaves the ring where it is.
+    await $.clock.sleep(FRAME_MS).then(
+      () => focus('draft'),
+      () => undefined,
+    )
+  }
+
   const complete = async (name: string) => {
     await update($, draft, value => replaceToken(value, name))
-    await Promise.resolve()
-      .then(() => $.ui.focus({ requestId: bandId, key: 'draft' }))
-      .catch(() => undefined)
+    void cursorToEnd()
   }
 
   const remove = (ids: string[]) =>
@@ -267,6 +282,7 @@ async function draw(
         await update($, draft, current =>
           current === before || current === value ? replaceToken(value, command.name) : current,
         )
+        void cursorToEnd()
 
         return
       }
