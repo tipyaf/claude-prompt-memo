@@ -451,7 +451,7 @@ async function draw(
                 rows={3}
                 placeholder="Nouveau prompt… (collage accepté, Entrée pour ajouter)"
                 value={text}
-                submitLabel={editing ? '✓' : highlighted ? '⇥' : '+'}
+                submitLabel={editing ? '✓' : highlighted ? '→' : '+'}
                 onInput={(value: string) => update($, draft, () => value)}
                 onSubmit={(value: string) => save(value)}
               />

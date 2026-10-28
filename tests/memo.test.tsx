@@ -178,7 +178,7 @@ test('a /word in the field lists matching commands and skills to complete', asyn
     expect(await color('review')).toBeUndefined()
     await ui.input({ key: 'draft', text: '/re', kind: 'change' })
     expect(await color('review')).toBe('suggestion')
-    expect((await ui.find({ key: 'draft' }))?.props?.submitLabel).toBe('⇥')
+    expect((await ui.find({ key: 'draft' }))?.props?.submitLabel).toBe('→')
     expect(await color('resume')).toBeUndefined()
 
     await ui.input({
