@@ -63,16 +63,16 @@ function replaceToken(value: string, name: string) {
 function partialCommand(value: string) {
   const at = slashToken(value)
 
-  return at && at.start === 0 && at.query.length > 0 ? at.query : null
+  return at && value.slice(0, at.start).trim() === '' && at.query.length > 0 ? at.query : null
 }
 
-function completeOnEnter(value: string, query: string, commands: CommandInfo[]) {
-  const starts = commands.filter(one => one.name.toLowerCase().startsWith(query))
-  if (starts.length === 0 || starts.some(one => one.name.toLowerCase() === query)) {
-    return null
-  }
+// The command Enter takes for a partial `query`: the first match when it starts with the query,
+// none when a name is typed whole.
+function enterCommand(query: string, matches: CommandInfo[]) {
+  const [first] = matches
+  const isWhole = matches.some(one => one.name.toLowerCase() === query)
 
-  return replaceToken(value, starts[0]!.name)
+  return first && !isWhole && first.name.toLowerCase().startsWith(query) ? first : null
 }
 
 const SOURCE_TAGS: Record<CommandInfo['source'], string> = {
@@ -132,13 +132,15 @@ async function draw(
   const opened = await read($, expanded)
   const textWidth = Math.max(12, columns - ROW_CHROME_COLUMNS)
   const isLong = (item: MemoItem) => preview(item.text, textWidth) !== item.text
+  // Only a surface that draws the field reads the list or drops it, so mobile leaves it alone.
   const token = collapsed || !Input ? null : slashToken(text)
-  if (!token) {
+  if (Input && !token) {
     commandsCache = null
   }
-  const suggestions = token
-    ? matchCommands(await commands($, session.requestId), token.query).slice(0, MAX_SUGGESTIONS)
-    : []
+  const matches = token ? matchCommands(await commands($, session.requestId), token.query) : []
+  const suggestions = matches.slice(0, MAX_SUGGESTIONS)
+  const query = editing ? null : partialCommand(text)
+  const highlighted = query ? enterCommand(query, matches) : null
 
   const complete = (name: string) => update($, draft, value => replaceToken(value, name))
 
@@ -168,9 +170,10 @@ async function draw(
     }
     const id = await read($, editingId)
     const query = id ? null : partialCommand(value)
-    const completed = query && completeOnEnter(value, query, await commands($, session.requestId))
-    if (completed) {
-      await update($, draft, () => completed)
+    const command =
+      query && enterCommand(query, matchCommands(await commands($, session.requestId), query))
+    if (command) {
+      await update($, draft, () => replaceToken(value, command.name))
 
       return
     }
@@ -370,13 +373,13 @@ async function draw(
               />
               {suggestions.length > 0 && (
                 <Box flexDirection="column" paddingLeft={1}>
-                  {suggestions.map((command, index) => (
+                  {suggestions.map(command => (
                     <Button
                       key={`complete-${command.name}`}
                       plain
                       onPress={() => complete(command.name)}
                     >
-                      <Text color={index === 0 ? 'suggestion' : undefined} wrap="truncate-end">
+                      <Text color={command === highlighted ? 'suggestion' : undefined} wrap="truncate-end">
                         /{command.name}
                         {SOURCE_TAGS[command.source] && (
                           <Text dimColor> ({SOURCE_TAGS[command.source]})</Text>

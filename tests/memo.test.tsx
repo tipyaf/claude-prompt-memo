@@ -152,6 +152,10 @@ test('a /word in the field lists matching commands and skills to complete', asyn
     expect(await itemRows(ui)).toHaveLength(0)
     expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('/init ')
 
+    // Leading blank space still counts as a lone partial name.
+    await ui.input({ key: 'draft', text: '  /in' })
+    expect((await ui.find({ key: 'draft' }))?.props?.value).toBe('  /init ')
+
     // Enter on a whole command adds it to the memo, even when longer names start with it.
     await ui.input({ key: 'draft', text: '/review' })
     expect(await itemRows(ui)).toHaveLength(1)
